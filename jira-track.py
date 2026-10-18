@@ -187,6 +187,11 @@ td.num, th.num { text-align:right; white-space:nowrap; }
 .stat { background:var(--bg); border-radius:8px; padding:10px 14px; margin:12px 0; }
 .seg { border:1px solid var(--line); border-radius:8px; padding:12px 16px 4px; margin-bottom:14px; }
 .seg > h3 { margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
+details.fold > summary { cursor:pointer; user-select:none; color:var(--mut); font-size:12px; margin-bottom:8px; }
+details.seg > summary { font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin:0 0 10px; }
+details.seg:not([open]) { padding-bottom:12px; }
+details.seg:not([open]) > summary { margin-bottom:0; }
+.sub { text-transform:none; letter-spacing:0; margin-left:12px; color:var(--fg); font-size:12px; }
 .done td { opacity:.55; }
 a { color:var(--acc); text-decoration:none; }
 progress { width:200px; vertical-align:middle; }
@@ -235,6 +240,8 @@ progress { width:200px; vertical-align:middle; }
     <label>Filter<input id="k-filter" placeholder="text"></label>
     <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-only" style="margin:0"> only with hours</label>
   </div>
+  <details class="fold">
+  <summary>How this works</summary>
   <ul class="help">
     <li><b>Total</b>: hours spread across the working days of the period.</li>
     <li><b>Per day</b>: hours logged on every working day.</li>
@@ -246,8 +253,9 @@ progress { width:200px; vertical-align:middle; }
       </ul>
     </li>
     <li><b>Pin</b>: always keep the task in the list.</li>
-    <li>Hours formats: 8, 1.5, 1:30, 1h 30m, 45m.</li>
+    <li><b>Hours formats</b>: 8, 1.5, 1:30, 1h 30m, 45m.</li>
   </ul>
+  </details>
   <div id="k-status"></div>
   <div style="overflow:auto"><table id="k-table"></table></div>
 </section>
@@ -262,8 +270,8 @@ progress { width:200px; vertical-align:middle; }
       <label class="grow">Days off / holidays (YYYY-MM-DD, comma-separated)<input data-b="sched.exclude" placeholder="2026-11-04, 2026-11-05"></label>
     </div>
   </div>
-  <div class="seg">
-    <h3>Working day</h3>
+  <details class="seg fold">
+    <summary>Working day<span class="sub" id="s-wd-sum"></span></summary>
     <div class="row">
       <label>Day start<input type="time" data-b="sched.dayStart"></label>
       <label>Day end<input type="time" data-b="sched.dayEnd"></label>
@@ -275,16 +283,16 @@ progress { width:200px; vertical-align:middle; }
     <div class="row" style="margin-top:12px">
       <button class="btn" id="s-savecfg">Save to config file</button> <span data-cfg></span>
     </div>
-  </div>
-  <div class="seg">
-    <h3>Task tracking window</h3>
+  </details>
+  <details class="seg fold">
+    <summary>Task tracking window<span class="sub" id="s-tw-sum"></span></summary>
     <div class="row">
       <label>Status 1 (start)<select id="t-from" data-b="track.from"></select></label>
       <label>Status 2 (end)<select id="t-to" data-b="track.to"></select></label>
       <button class="btn" id="t-load">Load statuses</button> <span id="t-st"></span>
     </div>
     <p class="hint">A task in Task window mode is tracked only on working days from its first move into status 1 to its first move into status 2 (inclusive), within the selected period. Tasks that never entered status 1 use the whole period. Changing a status re-reads the history of the loaded tasks.</p>
-  </div>
+  </details>
   <div class="seg">
     <h3>Distribution</h3>
     <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="s-varied" style="margin:0"> Realistic spread (different hours on different days; recalculate for a new variation)</label>
@@ -505,7 +513,7 @@ document.addEventListener('input', (e) => {
   if (!el.dataset || !el.dataset.b) return;
   setPath(el.dataset.b, el.value);
   save();
-  if (el.dataset.b.startsWith('sched')) renderStats();
+  if (el.dataset.b.startsWith('sched') || el.dataset.b.startsWith('track.')) renderStats();
   if (el.dataset.b.startsWith('track.') && S.conn.token && S.issues.length) refreshWindows();
 });
 
@@ -848,6 +856,10 @@ function layout() {
 }
 
 function renderStats() {
+  const s = S.sched;
+  const wd = [1, 2, 3, 4, 5, 6, 0].filter((d) => s.days.includes(d)).map((d) => WD[d]).join(', ');
+  $('#s-wd-sum').textContent = `${s.dayStart}–${s.dayEnd}${s.breakStart && s.breakEnd ? `, break ${s.breakStart}–${s.breakEnd}` : ''} · ${wd || 'no days'}`;
+  $('#s-tw-sum').textContent = `${S.track.from} → ${S.track.to}`;
   const el = $('#s-stat');
   const g = dayGeometry();
   const days = workDays();

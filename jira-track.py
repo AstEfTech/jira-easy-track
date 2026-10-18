@@ -79,6 +79,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(403, 'forbidden')
         if self.path == '/api/config':
             return self.save_config()
+        if self.path == '/api/shutdown':
+            self.reply(200, 'bye')
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
         if self.path != '/api/jira':
             return self.reply(404, 'not found')
         size = int(self.headers.get('Content-Length') or 0)
@@ -207,9 +211,15 @@ progress { width:200px; vertical-align:middle; }
 .ptable td.sent { color:var(--ok); }
 .ptable td.rm { cursor:pointer; }
 .ptable td.rm:hover { background:color-mix(in srgb, var(--bad) 22%, transparent); }
-.ltable td.sum { width:100%; }
+.ltable { table-layout:fixed; }
+.ltable td.t { width:130px; white-space:nowrap; }
+.ltable td.k { width:130px; white-space:nowrap; }
 .ltable td.num { text-align:right; }
+.ltable td.st { width:170px; }
+.ltable td.sum div { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.ctable { table-layout:fixed; }
 .ptable td.fail { color:var(--bad); }
+header .quit { margin-left:auto; }
 .ptable tfoot td { font-weight:600; border-top:2px solid var(--line); }
 </style>
 </head>
@@ -218,62 +228,30 @@ progress { width:200px; vertical-align:middle; }
   <h1>Jira Easy Track</h1>
   <nav id="nav">
     <button data-tab="conn">1. Connection</button>
-    <button data-tab="tasks">2. Tasks</button>
-    <button data-tab="sched">3. Schedule</button>
+    <button data-tab="sched">2. Schedule</button>
+    <button data-tab="tasks">3. Tasks</button>
     <button data-tab="prev">4. Preview</button>
     <button data-tab="clear">5. Clear</button>
   </nav>
+  <button class="btn danger quit" id="quit" title="Stop the local server">Stop app</button>
 </header>
 <main>
 
 <section class="tab" id="t-conn">
   <h2>Connect to Jira Cloud</h2>
-  <label>Jira URL<input class="wide" id="c-base" placeholder="https://company.atlassian.net"></label>
-  <label>Email<input class="wide" id="c-email" autocomplete="off"></label>
-  <label>API token<input class="wide" id="c-token" type="password" autocomplete="off"></label>
-  <p class="hint">Create a token at id.atlassian.com/manage-profile/security/api-tokens. It is stored only in this browser's localStorage and is sent only to Jira through the local server.</p>
-  <button class="btn pri" id="c-test">Test and save</button> <span id="c-status"></span>
-  <h3>Config file</h3>
-  <p class="hint">Saves the connection (including the token, in plain text), JQL, displayed fields, pinned tasks and the working day settings to a JSON file next to the script. Once saved, changes are written automatically and loaded on every start.</p>
-  <button class="btn" id="c-savecfg">Save to config file</button> <span data-cfg></span>
-</section>
-
-<section class="tab" id="t-tasks">
-  <h2>Tasks and hours</h2>
-  <div class="row">
-    <label class="grow">JQL<input id="k-jql" data-b="jql"></label>
-    <button class="btn pri" id="k-load">Load tasks</button>
+  <div class="seg">
+    <h3>Authorization</h3>
+    <label>Jira URL<input class="wide" id="c-base" placeholder="https://company.atlassian.net"></label>
+    <label>Email<input class="wide" id="c-email" autocomplete="off"></label>
+    <label>API token<input class="wide" id="c-token" type="password" autocomplete="off"></label>
+    <p class="hint">Create a token at id.atlassian.com/manage-profile/security/api-tokens. It is stored only in this browser's localStorage and is sent only to Jira through the local server.</p>
+    <div class="row"><button class="btn pri" id="c-test">Test and save</button> <span id="c-status"></span></div>
   </div>
-  <div class="row">
-    <div>Fields: <span id="k-fields"></span></div>
-    <label>Add field<input id="k-addfield" list="k-fieldlist" placeholder="name or id"></label>
-    <datalist id="k-fieldlist"></datalist>
-    <button class="btn" id="k-addbtn">+</button>
+  <div class="seg">
+    <h3>Config file</h3>
+    <p class="hint">Saves the connection (including the token, in plain text), JQL, displayed fields, pinned tasks and the working day settings to a JSON file next to the script. Once saved, changes are written automatically and loaded on every start.</p>
+    <div class="row"><button class="btn" id="c-savecfg">Save to config file</button> <span data-cfg></span></div>
   </div>
-  <div class="row">
-    <label>Add task by key<input id="k-key" placeholder="PROJ-123"></label>
-    <button class="btn" id="k-keybtn">Add</button>
-    <label>Filter<input id="k-filter" placeholder="text"></label>
-    <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-only" style="margin:0"> only with hours</label>
-  </div>
-  <details class="fold">
-  <summary>How this works</summary>
-  <ul class="help">
-    <li><b>Total</b>: hours spread across the working days of the period.</li>
-    <li><b>Per day</b>: hours logged on every working day.</li>
-    <li><b>Timing</b>: how Total is spread: evenly, towards the start, middle or end, or a random share per day.</li>
-    <li><b>Range</b>: which days a task can be tracked on. It is preset when tasks are loaded, based on the task's status history; change it per task if needed.
-      <ul>
-        <li><b>Task window</b>: from the task's first move into status 1 to its first move into status 2 (set on the Schedule tab), within the period. Preset if the task has such a transition.</li>
-        <li><b>Whole period</b>: every working day of the period. Preset if it does not.</li>
-      </ul>
-    </li>
-    <li><b>Pin</b>: always keep the task in the list.</li>
-    <li><b>Hours formats</b>: 8, 1.5, 1:30, 1h 30m, 45m.</li>
-  </ul>
-  </details>
-  <div id="k-status"></div>
-  <div style="overflow:auto"><table id="k-table"></table></div>
 </section>
 
 <section class="tab" id="t-sched">
@@ -286,7 +264,7 @@ progress { width:200px; vertical-align:middle; }
       <label class="grow">Days off / holidays (YYYY-MM-DD, comma-separated)<input data-b="sched.exclude" placeholder="2026-11-04, 2026-11-05"></label>
     </div>
   </div>
-  <details class="seg fold">
+  <details class="seg fold" open>
     <summary>Working day<span class="sub" id="s-wd-sum"></span></summary>
     <div class="row">
       <label>Day start<input type="time" data-b="sched.dayStart"></label>
@@ -300,6 +278,43 @@ progress { width:200px; vertical-align:middle; }
       <button class="btn" id="s-savecfg">Save to config file</button> <span data-cfg></span>
     </div>
   </details>
+</section>
+
+<section class="tab" id="t-tasks">
+  <h2>Tasks and hours</h2>
+  <details class="seg fold">
+  <summary>How this works</summary>
+  <ul class="help">
+    <li><b>Total</b>: hours spread across the working days of the period.</li>
+    <li><b>Per day</b>: hours logged on every working day.</li>
+    <li><b>Timing</b>: how Total is spread: evenly, towards the start, middle or end, or a random share per day.</li>
+    <li><b>Range</b>: which days a task can be tracked on. It is preset when tasks are loaded, based on the task's status history; change it per task if needed.
+      <ul>
+        <li><b>Task window</b>: from the task's first move into status 1 to its first move into status 2 (set in Task tracking window), within the period. Preset if the task has such a transition.</li>
+        <li><b>Whole period</b>: every working day of the period. Preset if it does not.</li>
+      </ul>
+    </li>
+    <li><b>Pin</b>: always keep the task in the list.</li>
+    <li><b>Hours formats</b>: 8, 1.5, 1:30, 1h 30m, 45m.</li>
+  </ul>
+  </details>
+  <div class="seg">
+    <h3>Task source</h3>
+    <div class="row">
+      <label class="grow">JQL<input id="k-jql" data-b="jql"></label>
+      <button class="btn pri" id="k-load">Load tasks</button>
+    </div>
+    <div class="row">
+      <div>Fields: <span id="k-fields"></span></div>
+      <label>Add field<input id="k-addfield" list="k-fieldlist" placeholder="name or id"></label>
+      <datalist id="k-fieldlist"></datalist>
+      <button class="btn" id="k-addbtn">+</button>
+    </div>
+    <div class="row">
+      <label>Add task by key<input id="k-key" placeholder="PROJ-123"></label>
+      <button class="btn" id="k-keybtn">Add</button>
+    </div>
+  </div>
   <details class="seg fold">
     <summary>Task tracking window<span class="sub" id="s-tw-sum"></span></summary>
     <div class="row">
@@ -309,9 +324,18 @@ progress { width:200px; vertical-align:middle; }
     </div>
     <p class="hint">A task in Task window mode is tracked only on working days from its first move into status 1 to its first move into status 2 (inclusive), within the selected period. Tasks that never entered status 1 use the whole period. Changing a status re-reads the history of the loaded tasks.</p>
   </details>
-  <div class="seg">
-    <h3>Distribution</h3>
+  <details class="seg fold">
+    <summary>Distribution options<span class="sub" id="s-do-sum"></span></summary>
     <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="s-varied" style="margin:0"> Realistic spread (different hours on different days; recalculate for a new variation)</label>
+  </details>
+  <div class="seg">
+    <h3>Tasks</h3>
+    <div class="row">
+      <label>Filter<input id="k-filter" placeholder="text"></label>
+      <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-only" style="margin:0"> only with hours</label>
+    </div>
+    <div id="k-status"></div>
+    <div style="overflow:auto;margin-bottom:12px"><table id="k-table"></table></div>
   </div>
   <div class="stat" id="s-stat"></div>
   <button class="btn pri" id="s-calc">Calculate distribution</button> <span id="s-calcst"></span>
@@ -514,7 +538,7 @@ function show(tab) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 't-' + tab));
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   syncInputs();
-  if (tab === 'tasks') renderTasks();
+  if (tab === 'tasks') { renderTasks(); renderTrackOptions(); }
   if (tab === 'sched') renderSched();
   if (tab === 'prev') renderPreview();
   if (tab === 'clear') renderClear();
@@ -561,7 +585,7 @@ $('#c-savecfg').onclick = () => {
   save();
 };
 
-// ---------- 2. tasks ----------
+// ---------- 3. tasks ----------
 function renderFields() {
   $('#k-fields').innerHTML = '<span class="chip">Key</span>' + S.fields.map((f, i) =>
     `<span class="chip">${esc(f.name)} <button data-rmf="${i}" title="remove">×</button></span>`).join('');
@@ -663,15 +687,18 @@ $('#k-keybtn').onclick = async () => {
   }
 };
 
-// ---------- 3. schedule ----------
-function renderSched() {
+// ---------- 2. schedule ----------
+function renderTrackOptions() {
   if (!statusList.length && !statusTried && S.conn.token) { statusTried = true; loadStatuses(true); }
   $('#s-varied').checked = !!S.sched.varied;
+  renderStats();
+}
+function renderSched() {
   $('#s-days').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((d) =>
     `<label><input type="checkbox" data-day="${d}" ${S.sched.days.includes(d) ? 'checked' : ''}>${WD[d]}</label>`).join('');
   renderStats();
 }
-$('#s-varied').onchange = (e) => { S.sched.varied = e.target.checked; save(); };
+$('#s-varied').onchange = (e) => { S.sched.varied = e.target.checked; save(); renderStats(); };
 $('#s-savecfg').onclick = () => { cfgOn = true; save(); };
 
 let statusList = [];
@@ -876,6 +903,7 @@ function renderStats() {
   const wd = [1, 2, 3, 4, 5, 6, 0].filter((d) => s.days.includes(d)).map((d) => WD[d]).join(', ');
   $('#s-wd-sum').textContent = `${s.dayStart}–${s.dayEnd}${s.breakStart && s.breakEnd ? `, break ${s.breakStart}–${s.breakEnd}` : ''} · ${wd || 'no days'}`;
   $('#s-tw-sum').textContent = `${S.track.from} → ${S.track.to}`;
+  $('#s-do-sum').textContent = s.varied ? 'Realistic spread' : '';
   const el = $('#s-stat');
   const g = dayGeometry();
   const days = workDays();
@@ -962,7 +990,7 @@ function previewTable() {
 
 function renderPreview() {
   const box = $('#p-box');
-  if (!P) { box.innerHTML = '<p class="hint">Calculate the distribution on the Schedule tab first.</p>'; return; }
+  if (!P) { box.innerHTML = '<p class="hint">Calculate the distribution on the Tasks tab first.</p>'; return; }
   const oldScroll = box.querySelector('.pscroll');
   const sx = oldScroll ? oldScroll.scrollLeft : 0, sy = oldScroll ? oldScroll.scrollTop : 0;
   const byDay = {};
@@ -974,8 +1002,8 @@ function renderPreview() {
   const sumRows = Object.entries(per).map(([k, m]) => `<tr><td>${link(k)}</td><td>${esc(sumOf(k))}</td><td>${esc((P.ranges || {})[k] || '')}</td><td class="num">${fmtD(m)}</td></tr>`).join('');
   const days = Object.keys(byDay).sort().map((d) => {
     const es = byDay[d].sort((a, b) => a.start - b.start);
-    const rows = es.map((e) => `<tr class="${e.done ? 'done' : ''}"><td>${fmtT(e.start)}–${fmtT(e.start + e.min)}</td><td>${link(e.key)}</td><td class="sum">${esc(sumOf(e.key))}</td>` +
-      `<td class="num">${fmtD(e.min)}</td><td class="num">${e.done ? '<span class="okc">sent</span>' : e.err ? `<span class="err" title="${esc(e.err)}">error: ${esc(e.err)}</span>` : `<button class="btn" data-rm="${e.id}" title="remove entry" ${busy ? 'disabled' : ''}>×</button>`}</td></tr>`).join('');
+    const rows = es.map((e) => `<tr class="${e.done ? 'done' : ''}"><td class="t">${fmtT(e.start)}–${fmtT(e.start + e.min)}</td><td class="k">${link(e.key)}</td><td class="sum"><div title="${esc(sumOf(e.key))}">${esc(sumOf(e.key))}</div></td>` +
+      `<td class="num" style="width:70px">${fmtD(e.min)}</td><td class="num st">${e.done ? '<span class="okc">sent</span>' : e.err ? `<span class="err" title="${esc(e.err)}">error: ${esc(e.err)}</span>` : `<button class="btn" data-rm="${e.id}" title="remove entry" ${busy ? 'disabled' : ''}>×</button>`}</td></tr>`).join('');
     return `<h3>${d} ${WD[pYmd(d).getDay()]}<small>${fmtD(es.reduce((a, e) => a + e.min, 0))}</small></h3><table class="ltable">${rows}</table>`;
   }).join('');
   box.innerHTML =
@@ -1038,15 +1066,24 @@ async function send() {
   setStatus($('#p-status'), `${stopReq ? 'Stopped. ' : ''}Sent: ${ok}, failed: ${fail}${ok + fail < todo.length || fail ? ' — click "Approve" again to send the remaining/failed ones' : ''}`, fail ? 'err' : 'okc');
 }
 
+$('#quit').onclick = async () => {
+  if (!confirm('Stop the app? The local server will shut down.')) return;
+  try { await fetch('/api/shutdown', { method: 'POST', headers: { 'X-Track-Token': TRACK_TOKEN } }); } catch (e) {}
+  document.body.innerHTML = '<p style="padding:40px;text-align:center">The app has been stopped. You can close this tab.</p>';
+};
+
 // ---------- 5. clear ----------
 function renderClear() {
   const box = $('#x-box');
   if (!found) { box.innerHTML = ''; return; }
   const total = found.items.reduce((a, w) => a + w.min, 0);
-  const rows = found.items.map((w) => `<tr><td>${w.date}</td><td>${link(w.key)}</td><td>${esc(w.summary)}</td><td class="num">${fmtD(w.min)}</td></tr>`).join('');
-  box.innerHTML = `<div class="stat">Found: <b>${found.items.length}</b> · total: <b>${fmtD(total)}</b></div>` +
-    (found.items.length ? `<div class="row"><button class="btn danger" id="x-del" ${busy ? 'disabled' : ''}>Delete all found</button>${busy ? '<button class="btn" id="x-stop">Stop</button>' : ''}<span id="x-status"></span></div>` : '') +
-    `<table>${rows}</table>`;
+  const deleted = found.items.filter((w) => w.deleted).length;
+  const rows = found.items.map((w) => `<tr class="${w.deleted ? 'done' : ''}"><td>${w.date}</td><td>${link(w.key)}</td><td>${esc(w.summary)}</td><td class="num">${fmtD(w.min)}</td>` +
+    `<td>${w.deleted ? '<span class="err">deleted</span>' : w.err ? `<span class="err">error: ${esc(w.err)}</span>` : ''}</td></tr>`).join('');
+  const st = found.status || { text: '', cls: '' };
+  box.innerHTML = `<div class="stat">Found: <b>${found.items.length}</b> · total: <b>${fmtD(total)}</b> · deleted: <b>${deleted}</b></div>` +
+    (found.items.length ? `<div class="row"><button class="btn danger" id="x-del" ${busy || deleted === found.items.length ? 'disabled' : ''}>Delete all found</button>${busy ? '<button class="btn" id="x-stop">Stop</button>' : ''}<span id="x-status" class="${st.cls}">${esc(st.text)}</span></div>` : '') +
+    `<table class="ctable"><colgroup><col style="width:110px"><col style="width:130px"><col><col style="width:90px"><col style="width:170px"></colgroup>${rows}</table>`;
 }
 
 $('#x-find').onclick = async () => {
@@ -1086,33 +1123,32 @@ $('#x-find').onclick = async () => {
 };
 
 $('#x-box').addEventListener('click', async (e) => {
-  if (e.target.id === 'x-stop') { stopReq = true; setStatus($('#x-status'), 'Stopping after the current request...'); return; }
+  if (e.target.id === 'x-stop') { stopReq = true; if (found) found.status = { text: 'Stopping after the current request...', cls: '' }; setStatus($('#x-status'), 'Stopping after the current request...'); return; }
   if (e.target.id !== 'x-del' || busy || !found) return;
-  const n = found.items.length;
+  const todo = found.items.filter((w) => !w.deleted);
+  const n = todo.length;
+  if (!n) return;
   if (!confirm(`Delete ${n} of your worklogs for ${S.clear.from} — ${S.clear.to}? This cannot be undone.`)) return;
   busy = true;
   stopReq = false;
-  renderClear();
   let ok = 0, fail = 0, lastErr = '';
-  for (const w of [...found.items]) {
+  for (const w of todo) {
     if (stopReq) break;
-    const st = $('#x-status');
-    if (st) st.textContent = `Deleting ${ok + fail + 1}/${n}...`;
+    found.status = { text: `Deleting ${ok + fail + 1}/${n}...`, cls: '' };
+    renderClear();
     try {
       await jira('DELETE', `/rest/api/3/issue/${encodeURIComponent(w.key)}/worklog/${w.id}?adjustEstimate=leave`);
-      found.items = found.items.filter((x) => x !== w);
+      w.deleted = true; w.err = '';
       ok++;
     } catch (x) {
+      w.err = x.message;
       fail++; lastErr = x.message;
       if (x.status === 401 || x.status === 0) break;
     }
   }
   busy = false;
+  found.status = { text: `${stopReq ? 'Stopped. ' : ''}Deleted: ${ok}, failed: ${fail}${lastErr ? ' (' + lastErr + ')' : ''}`, cls: fail ? 'err' : 'okc' };
   renderClear();
-  setStatus($('#x-status') || document.createElement('span'), '');
-  const msg = `${stopReq ? 'Stopped. ' : ''}Deleted: ${ok}, failed: ${fail}${lastErr ? ' (' + lastErr + ')' : ''}`;
-  const box = $('#x-box');
-  box.insertAdjacentHTML('afterbegin', `<p class="${fail ? 'err' : 'okc'}">${esc(msg)}</p>`);
 });
 
 (async () => {
@@ -1120,7 +1156,7 @@ $('#x-box').addEventListener('click', async (e) => {
   fillConn();
   renderStatusOptions();
   localStorage.setItem(LS, JSON.stringify(S));
-  show(S.conn.token ? 'tasks' : 'conn');
+  show(cfgOn ? 'tasks' : 'conn');
 })();
 </script>
 </body>

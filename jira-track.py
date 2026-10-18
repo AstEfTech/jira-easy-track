@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 TOKEN = secrets.token_hex(16)
 HOST_RE = re.compile(r'^(127\.0\.0\.1|localhost):\d+$')
 CONFIG_PATH = os.environ.get('JIRA_TRACK_CONFIG') or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'jira-track.config.json')
-CONFIG_KEYS = ('conn', 'jql', 'fields', 'pinned', 'workday')
+CONFIG_KEYS = ('conn', 'jql', 'fields', 'pinned', 'workday', 'track')
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -175,6 +175,10 @@ th, td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--line);
 th { color:var(--mut); font-weight:500; font-size:12px; }
 td input { width:86px; }
 td.num, th.num { text-align:right; white-space:nowrap; }
+#k-table td.num, #k-table th.num { text-align:left; }
+.help { color:var(--mut); font-size:12px; margin:6px 0 14px; padding-left:18px; line-height:1.6; }
+.help ul { margin:2px 0 4px; padding-left:18px; }
+.help b { color:var(--fg); font-weight:600; }
 .chip { display:inline-flex; gap:6px; align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:2px 4px 2px 10px; margin-right:6px; }
 .chip button { border:0; background:none; cursor:pointer; color:var(--mut); font-size:14px; }
 .days { display:flex; gap:12px; flex-wrap:wrap; }
@@ -231,7 +235,19 @@ progress { width:200px; vertical-align:middle; }
     <label>Filter<input id="k-filter" placeholder="text"></label>
     <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-only" style="margin:0"> only with hours</label>
   </div>
-  <p class="hint">"Total" is spread across all working days of the period. "Per day" is logged on every working day. "Timing" shifts the "Total" hours towards the start, middle or end of the period, or gives each day a random share. Tick "Pin" to always show a task in the list. Formats: 8, 1.5, 1:30, 1h 30m, 45m.</p>
+  <ul class="help">
+    <li><b>Total</b>: hours spread across the working days of the period.</li>
+    <li><b>Per day</b>: hours logged on every working day.</li>
+    <li><b>Timing</b>: how Total is spread: evenly, towards the start, middle or end, or a random share per day.</li>
+    <li><b>Range</b>: which days a task can be tracked on. It is preset when tasks are loaded, based on the task's status history; change it per task if needed.
+      <ul>
+        <li><b>Task window</b>: from the task's first move into status 1 to its first move into status 2 (set on the Schedule tab), within the period. Preset if the task has such a transition.</li>
+        <li><b>Whole period</b>: every working day of the period. Preset if it does not.</li>
+      </ul>
+    </li>
+    <li><b>Pin</b>: always keep the task in the list.</li>
+    <li>Hours formats: 8, 1.5, 1:30, 1h 30m, 45m.</li>
+  </ul>
   <div id="k-status"></div>
   <div style="overflow:auto"><table id="k-table"></table></div>
 </section>
@@ -261,11 +277,20 @@ progress { width:200px; vertical-align:middle; }
     </div>
   </div>
   <div class="seg">
+    <h3>Task tracking window</h3>
+    <div class="row">
+      <label>Status 1 (start)<select id="t-from" data-b="track.from"></select></label>
+      <label>Status 2 (end)<select id="t-to" data-b="track.to"></select></label>
+      <button class="btn" id="t-load">Load statuses</button> <span id="t-st"></span>
+    </div>
+    <p class="hint">A task in Task window mode is tracked only on working days from its first move into status 1 to its first move into status 2 (inclusive), within the selected period. Tasks that never entered status 1 use the whole period. Changing a status re-reads the history of the loaded tasks.</p>
+  </div>
+  <div class="seg">
     <h3>Distribution</h3>
     <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="s-varied" style="margin:0"> Realistic spread (different hours on different days; recalculate for a new variation)</label>
   </div>
   <div class="stat" id="s-stat"></div>
-  <button class="btn pri" id="s-calc">Calculate distribution</button>
+  <button class="btn pri" id="s-calc">Calculate distribution</button> <span id="s-calcst"></span>
 </section>
 
 <section class="tab" id="t-prev">
@@ -298,6 +323,7 @@ const fmtT = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
 const fmtD = (m) => { const h = Math.floor(m / 60), r = m % 60; return (h ? h + 'h' : '') + (h && r ? ' ' : '') + (r || !h ? r + 'm' : ''); };
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SHIFTS = [['', 'Even'], ['start', 'Start'], ['mid', 'Middle'], ['end', 'End'], ['random', 'Random']];
+const RANGES = [['window', 'Task window'], ['period', 'Whole period']];
 
 function parseH(s) {
   s = String(s || '').trim().toLowerCase().replace(',', '.');
@@ -319,6 +345,8 @@ const DEF = {
   jql: 'assignee = currentUser() ORDER BY updated DESC',
   fields: [{ id: 'summary', name: 'Summary' }],
   pinned: [],
+  track: { from: 'In Progress', to: 'Done' },
+  windows: {},
   plan: {},
   issues: [],
   sched: { from: monthStart, to: today, dayStart: '10:00', dayEnd: '19:00', breakStart: '13:00', breakEnd: '14:00', step: '15', days: [1, 2, 3, 4, 5], exclude: '', varied: false },
@@ -331,8 +359,9 @@ try {
   S.sched = { ...DEF.sched, ...saved.sched };
   S.clear = { ...DEF.clear, ...saved.clear };
   S.conn = { ...DEF.conn, ...saved.conn };
+  S.track = { from: saved.track?.from || DEF.track.from, to: saved.track?.to || DEF.track.to };
 } catch { S = structuredClone(DEF); }
-const CFG_KEYS = ['conn', 'jql', 'fields', 'pinned'];
+const CFG_KEYS = ['conn', 'jql', 'fields', 'pinned', 'track'];
 const WORKDAY_KEYS = ['dayStart', 'dayEnd', 'breakStart', 'breakEnd', 'step', 'days', 'varied'];
 let cfgOn = false;
 let cfgTimer = null;
@@ -372,6 +401,11 @@ async function loadConfig() {
       if (['5', '10', '15', '30', '60'].includes(String(w.step))) S.sched.step = String(w.step);
       if (Array.isArray(w.days)) S.sched.days = w.days.map(Number).filter((d) => d >= 0 && d <= 6);
       if (typeof w.varied === 'boolean') S.sched.varied = w.varied;
+    }
+    const tr = c.track;
+    if (tr && typeof tr === 'object') {
+      if (typeof tr.from === 'string' && tr.from) S.track.from = tr.from;
+      if (typeof tr.to === 'string' && tr.to) S.track.to = tr.to;
     }
     cfgOn = true;
     cfgStatus('Loaded from ' + j.path, 'okc');
@@ -419,7 +453,7 @@ async function searchIssues(jql, fields) {
   return out;
 }
 
-async function loadIssues() {
+async function loadIssues(onProgress) {
   const ids = S.fields.map((f) => f.id);
   let list = await searchIssues(S.jql, ids);
   const have = new Set(list.map((i) => i.key));
@@ -431,6 +465,7 @@ async function loadIssues() {
     }
   }
   S.issues = list;
+  await loadWindows(list.map((i) => i.key), onProgress);
   save();
 }
 
@@ -471,6 +506,7 @@ document.addEventListener('input', (e) => {
   setPath(el.dataset.b, el.value);
   save();
   if (el.dataset.b.startsWith('sched')) renderStats();
+  if (el.dataset.b.startsWith('track.') && S.conn.token && S.issues.length) refreshWindows();
 });
 
 // ---------- 1. connection ----------
@@ -511,7 +547,7 @@ function renderTasks() {
   renderFields();
   const filter = $('#k-filter').value.trim().toLowerCase();
   const only = $('#k-only').checked;
-  const head = '<tr><th>Key</th>' + S.fields.map((f) => `<th>${esc(f.name)}</th>`).join('') + '<th class="num">Total</th><th class="num">Per day</th><th>Timing</th><th>Pin</th></tr>';
+  const head = '<tr><th>Key</th>' + S.fields.map((f) => `<th>${esc(f.name)}</th>`).join('') + '<th class="num">Total</th><th class="num">Per day</th><th>Timing</th><th>Range</th><th>Pin</th></tr>';
   const rows = S.issues.map((i) => {
     const p = S.plan[i.key] || {};
     const cells = S.fields.map((f) => { const v = val(i.fields?.[f.id]); return `<td>${esc(v.length > 200 ? v.slice(0, 200) + '…' : v)}</td>`; }).join('');
@@ -522,6 +558,7 @@ function renderTasks() {
       `<td class="num"><input data-k="${esc(i.key)}" data-f="total" value="${esc(p.total || '')}" placeholder="0"></td>` +
       `<td class="num"><input data-k="${esc(i.key)}" data-f="fixed" value="${esc(p.fixed || '')}" placeholder="0"></td>` +
       `<td><select data-k="${esc(i.key)}" data-f="shift">${SHIFTS.map(([v, l]) => `<option value="${v}"${(p.shift || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
+      `<td><select data-k="${esc(i.key)}" data-f="range">${RANGES.map(([v, l]) => `<option value="${v}"${effRange(i.key) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
       `<td><input type="checkbox" style="width:auto" data-pin="${esc(i.key)}"${S.pinned.includes(i.key) ? ' checked' : ''}></td></tr>`;
   }).join('');
   $('#k-table').innerHTML = head + rows;
@@ -537,10 +574,10 @@ function planSummary() {
 $('#k-table').addEventListener('input', (e) => {
   const el = e.target;
   if (!el.dataset.k) return;
-  const p = (S.plan[el.dataset.k] ??= { total: '', fixed: '', shift: '' });
+  const p = (S.plan[el.dataset.k] ??= { total: '', fixed: '', shift: '', range: '' });
   p[el.dataset.f] = el.value.trim();
   if (el.tagName === 'INPUT') el.classList.toggle('bad', Number.isNaN(parseH(el.value)));
-  if (!p.total && !p.fixed && !p.shift) delete S.plan[el.dataset.k];
+  if (!p.total && !p.fixed && !p.shift && !p.range) delete S.plan[el.dataset.k];
   save();
   const hint = $('#k-status .hint');
   if (hint) hint.textContent = `Tasks: ${S.issues.length}. ${planSummary()}`;
@@ -558,7 +595,7 @@ $('#k-only').onchange = renderTasks;
 async function reload() {
   const st = $('#k-status');
   setStatus(st, 'Loading...');
-  try { await loadIssues(); renderTasks(); } catch (e) { setStatus(st, e.message, 'err'); }
+  try { await loadIssues((d, n) => setStatus(st, `Reading task history ${d}/${n}...`)); renderTasks(); } catch (e) { setStatus(st, e.message, 'err'); }
 }
 $('#k-load').onclick = reload;
 
@@ -604,6 +641,7 @@ $('#k-keybtn').onclick = async () => {
 
 // ---------- 3. schedule ----------
 function renderSched() {
+  if (!statusList.length && !statusTried && S.conn.token) { statusTried = true; loadStatuses(true); }
   $('#s-varied').checked = !!S.sched.varied;
   $('#s-days').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((d) =>
     `<label><input type="checkbox" data-day="${d}" ${S.sched.days.includes(d) ? 'checked' : ''}>${WD[d]}</label>`).join('');
@@ -611,6 +649,83 @@ function renderSched() {
 }
 $('#s-varied').onchange = (e) => { S.sched.varied = e.target.checked; save(); };
 $('#s-savecfg').onclick = () => { cfgOn = true; save(); };
+
+let statusList = [];
+let statusTried = false;
+const parseJiraDate = (s) => new Date(s.replace(/([+-]\d\d)(\d\d)$/, '$1:$2'));
+const winValid = (key) => S.windows[key]?.sf === S.track.from && S.windows[key]?.st === S.track.to;
+const defaultRange = (key) => (winValid(key) && S.windows[key].start ? 'window' : 'period');
+const effRange = (key) => S.plan[key]?.range || defaultRange(key);
+
+function renderStatusOptions() {
+  const opts = [...new Set([...statusList, S.track.from, S.track.to])].map((n) => `<option>${esc(n)}</option>`).join('');
+  $('#t-from').innerHTML = opts;
+  $('#t-to').innerHTML = opts;
+  $('#t-from').value = S.track.from;
+  $('#t-to').value = S.track.to;
+}
+
+async function loadStatuses(silent) {
+  const st = $('#t-st');
+  if (!silent) setStatus(st, 'Loading...');
+  try {
+    const all = await jira('GET', '/rest/api/3/status');
+    const order = { new: 0, indeterminate: 1, done: 2 };
+    all.sort((a, b) => (order[a.statusCategory?.key] ?? 3) - (order[b.statusCategory?.key] ?? 3) || a.name.localeCompare(b.name));
+    statusList = all.map((s) => s.name);
+    renderStatusOptions();
+    setStatus(st, `${statusList.length} statuses loaded`, 'okc');
+  } catch (e) { if (!silent) setStatus(st, e.message, 'err'); }
+}
+$('#t-load').onclick = () => loadStatuses(false);
+
+async function fetchWindow(key, from, to) {
+  const hist = [];
+  for (let at = 0; ;) {
+    const r = await jira('GET', `/rest/api/3/issue/${encodeURIComponent(key)}/changelog?startAt=${at}&maxResults=100`);
+    hist.push(...r.values);
+    at += r.values.length;
+    if (r.isLast || !r.values.length || at >= r.total) break;
+  }
+  const tr = hist
+    .flatMap((h) => h.items.filter((i) => i.field === 'status').map((i) => ({ t: parseJiraDate(h.created), to: (i.toString || '').toLowerCase() })))
+    .sort((a, b) => a.t - b.t);
+  const s = tr.find((x) => x.to === from.toLowerCase());
+  const e = tr.find((x) => x.to === to.toLowerCase() && (!s || x.t >= s.t));
+  return { start: s ? ymd(s.t) : null, end: e ? ymd(e.t) : null };
+}
+
+// Windows that are complete (start and end known) are cached; the rest are re-read.
+async function loadWindows(keys, onProgress, strict) {
+  const sf = S.track.from, st = S.track.to;
+  const todo = keys.filter((k) => !(winValid(k) && S.windows[k].start && S.windows[k].end));
+  const total = todo.length;
+  let done = 0, err = null;
+  const worker = async () => {
+    while (todo.length) {
+      const k = todo.shift();
+      try { S.windows[k] = { ...(await fetchWindow(k, sf, st)), sf, st }; } catch (e) { err ||= e; }
+      if (onProgress) onProgress(++done, total);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(5, total) }, worker));
+  save();
+  if (err && strict) throw err;
+}
+
+async function refreshWindows() {
+  const st = $('#t-st');
+  await loadWindows(S.issues.map((i) => i.key), (d, n) => setStatus(st, `Updating task history ${d}/${n}...`));
+  setStatus(st, 'Task history updated', 'okc');
+}
+
+async function ensureWindows() {
+  const keys = Object.entries(S.plan)
+    .filter(([, p]) => (parseH(p.total) > 0 || parseH(p.fixed) > 0) && p.range !== 'period')
+    .map(([k]) => k);
+  await loadWindows(keys, (d, n) => setStatus($('#s-calcst'), `Reading task history ${d}/${n}...`), true);
+  setStatus($('#s-calcst'), '');
+}
 $('#s-days').onchange = (e) => {
   const d = +e.target.dataset.day;
   S.sched.days = S.sched.days.filter((x) => x !== d);
@@ -659,9 +774,20 @@ function layout() {
   const units = (m) => Math.max(1, Math.round(m / step));
   const warnings = [];
   const tasks = Object.entries(S.plan)
-    .map(([key, p]) => ({ key, total: parseH(p.total) || 0, fixed: parseH(p.fixed) || 0, shift: p.shift || '' }))
+    .map(([key, p]) => ({ key, total: parseH(p.total) || 0, fixed: parseH(p.fixed) || 0, shift: p.shift || '', range: p.range || defaultRange(key) }))
     .filter((t) => t.total > 0 || t.fixed > 0);
-  const D = days.length;
+  const ranges = {};
+  tasks.forEach((t) => {
+    let lo = '', hi = '';
+    if (t.range === 'window') {
+      const w = S.windows[t.key];
+      if (winValid(t.key) && w.start) { lo = w.start; hi = w.end || ''; }
+      else warnings.push(`${t.key}: no transition to "${S.track.from}" found, using the whole period`);
+    }
+    t.ok = days.map((date) => (!lo || date >= lo) && (!hi || date <= hi));
+    ranges[t.key] = lo ? `${lo} – ${hi || 'now'}` : 'whole period';
+    if (!t.ok.some(Boolean)) warnings.push(`${t.key}: no working days inside the task window (${ranges[t.key]}), its hours were skipped`);
+  });
   const cap = days.map(() => Math.floor(g.len / step));
   const alloc = days.map(() => []);
 
@@ -669,6 +795,7 @@ function layout() {
     const u = units(t.fixed);
     let cut = false;
     days.forEach((_, d) => {
+      if (!t.ok[d]) return;
       const x = Math.min(u, cap[d]);
       if (x < u) cut = true;
       if (x > 0) { alloc[d].push({ key: t.key, u: x }); cap[d] -= x; }
@@ -679,20 +806,24 @@ function layout() {
   const varTasks = tasks.filter((t) => t.total > 0);
   const dayF = days.map(() => (S.sched.varied ? 0.5 + Math.random() : 1));
   varTasks.forEach((t, ti) => {
+    const idx = days.map((_, d) => d).filter((d) => t.ok[d]);
+    const M = idx.length;
+    if (!M) return;
     const U = units(t.total);
     const per = days.map(() => 0);
-    const rot = Math.floor((ti * D) / varTasks.length);
-    const w = days.map((_, d) => shiftWeight(t.shift, D > 1 ? d / (D - 1) : 0.5) * dayF[d] * (S.sched.varied ? 0.75 + Math.random() * 0.5 : 1));
+    const rot = Math.floor((ti * M) / varTasks.length);
+    const w = idx.map((d, k) => shiftWeight(t.shift, M > 1 ? k / (M - 1) : 0.5) * dayF[d] * (S.sched.varied ? 0.75 + Math.random() * 0.5 : 1));
     const wSum = w.reduce((a, x) => a + x, 0);
-    const deficit = (d) => (U * w[d]) / wSum - per[d];
+    const deficit = (k) => (U * w[k]) / wSum - per[idx[k]];
     for (let n = 0; n < U; n++) {
       let best = -1;
-      for (let d = 0; d < D; d++) {
+      for (let k = 0; k < M; k++) {
+        const d = idx[k];
         if (cap[d] <= 0) continue;
-        if (best < 0 || deficit(d) > deficit(best) || (deficit(d) === deficit(best) && (cap[d] > cap[best] || (cap[d] === cap[best] && (d - rot + D) % D < (best - rot + D) % D)))) best = d;
+        if (best < 0 || deficit(k) > deficit(best) || (deficit(k) === deficit(best) && (cap[d] > cap[idx[best]] || (cap[d] === cap[idx[best]] && (k - rot + M) % M < (best - rot + M) % M)))) best = k;
       }
       if (best < 0) { warnings.push(`${t.key}: ${fmtD((U - n) * step)} did not fit (no free time left in the period)`); break; }
-      per[best]++; cap[best]--;
+      per[idx[best]]++; cap[idx[best]]--;
     }
     per.forEach((u, d) => { if (u > 0) alloc[d].push({ key: t.key, u }); });
   });
@@ -713,7 +844,7 @@ function layout() {
       }
     });
   });
-  return { entries, warnings, days, g, tasks };
+  return { entries, warnings, days, g, tasks, ranges };
 }
 
 function renderStats() {
@@ -727,12 +858,17 @@ function renderStats() {
   el.innerHTML = `Working days: <b>${days.length}</b> · per day: <b>${fmtD(g.len)}</b> · available: <b>${fmtD(capTotal)}</b> · planned: <b class="${total > capTotal ? 'err' : ''}">${fmtD(total)}</b>`;
 }
 
-$('#s-calc').onclick = () => {
+$('#s-calc').onclick = async () => {
   if (P && P.entries.some((e) => e.done) && !confirm('Some entries were already sent. Recalculating and sending again will create duplicates. Continue?')) return;
+  const btn = $('#s-calc');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try { await ensureWindows(); } catch (e) { btn.disabled = false; return alert(e.message); }
+  btn.disabled = false;
   const r = layout();
   if (r.error) return alert(r.error);
   if (!r.entries.length) return alert('No tasks with hours. Fill in hours on the Tasks tab.');
-  P = { entries: r.entries, warnings: r.warnings };
+  P = { entries: r.entries, warnings: r.warnings, ranges: r.ranges };
   show('prev');
 };
 
@@ -754,7 +890,7 @@ function renderPreview() {
   const sent = P.entries.filter((e) => e.done).length;
   const per = {};
   P.entries.forEach((e) => { per[e.key] = (per[e.key] || 0) + e.min; });
-  const sumRows = Object.entries(per).map(([k, m]) => `<tr><td>${link(k)}</td><td>${esc(sumOf(k))}</td><td class="num">${fmtD(m)}</td></tr>`).join('');
+  const sumRows = Object.entries(per).map(([k, m]) => `<tr><td>${link(k)}</td><td>${esc(sumOf(k))}</td><td>${esc((P.ranges || {})[k] || '')}</td><td class="num">${fmtD(m)}</td></tr>`).join('');
   const days = Object.keys(byDay).sort().map((d) => {
     const es = byDay[d].sort((a, b) => a.start - b.start);
     const rows = es.map((e) => `<tr class="${e.done ? 'done' : ''}"><td>${fmtT(e.start)}–${fmtT(e.start + e.min)}</td><td>${link(e.key)}</td><td>${esc(sumOf(e.key))}</td>` +
@@ -886,6 +1022,7 @@ $('#x-box').addEventListener('click', async (e) => {
 (async () => {
   await loadConfig();
   fillConn();
+  renderStatusOptions();
   localStorage.setItem(LS, JSON.stringify(S));
   show(S.conn.token ? 'tasks' : 'conn');
 })();

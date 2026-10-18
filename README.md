@@ -13,6 +13,7 @@ No background agent, no screenshots, no window or keystroke tracking, no timers 
    - **Timing**: even, towards the start / middle / end of the period, or random.
    - **Pin** a task to always keep it in the list.
 3. **Schedule**: choose the period, working day start/end, an optional break, working weekdays and days off. Optionally enable a realistic spread so different days get different hours.
+   - **Task tracking window**: a task is tracked only between its first move into status 1 (default `In Progress`) and its first move into status 2 (default `Done`), inside the selected period. Both statuses are picked from your Jira's status list. When tasks are loaded, their status history is read and **Range** is preset: Task window if the task has such a transition, Whole period otherwise. You can change it per task on the Tasks tab.
 4. **Preview**: review the generated per-day distribution, remove entries you don't want, then approve to push the worklogs to Jira. A Stop button interrupts sending at any time.
 5. **Clear**: find and delete your own worklogs for a period (with a Stop button as well).
 

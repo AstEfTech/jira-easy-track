@@ -195,7 +195,12 @@ details.fold > summary { cursor:pointer; user-select:none; color:var(--mut); fon
 details.seg > summary { font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin:0 0 10px; }
 details.seg:not([open]) { padding-bottom:12px; }
 details.seg:not([open]) > summary { margin-bottom:0; }
+.split { justify-content:space-between; align-items:center; margin-top:12px; }
+.lbl { color:var(--mut); font-size:12px; margin-bottom:3px; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:32px; }
+.chips .chip { margin:0; }
 .sub { text-transform:none; letter-spacing:0; margin-left:12px; color:var(--fg); font-size:12px; }
+td input.sug { font-style:italic; color:var(--mut); }
 .done td { opacity:.55; }
 a { color:var(--acc); text-decoration:none; }
 progress { width:200px; vertical-align:middle; }
@@ -227,18 +232,17 @@ header .quit { margin-left:auto; }
 <header>
   <h1>Jira Easy Track</h1>
   <nav id="nav">
-    <button data-tab="conn">1. Connection</button>
-    <button data-tab="sched">2. Schedule</button>
-    <button data-tab="tasks">3. Tasks</button>
-    <button data-tab="prev">4. Preview</button>
-    <button data-tab="clear">5. Clear</button>
+    <button data-tab="conn">1. Setup</button>
+    <button data-tab="tasks">2. Tasks</button>
+    <button data-tab="prev">3. Preview</button>
+    <button data-tab="clear">4. Clear</button>
   </nav>
   <button class="btn danger quit" id="quit" title="Stop the local server">Stop app</button>
 </header>
 <main>
 
 <section class="tab" id="t-conn">
-  <h2>Connect to Jira Cloud</h2>
+  <h2>Setup</h2>
   <div class="seg">
     <h3>Authorization</h3>
     <label>Jira URL<input class="wide" id="c-base" placeholder="https://company.atlassian.net"></label>
@@ -249,20 +253,8 @@ header .quit { margin-left:auto; }
   </div>
   <div class="seg">
     <h3>Config file</h3>
-    <p class="hint">Saves the connection (including the token, in plain text), JQL, displayed fields, pinned tasks and the working day settings to a JSON file next to the script. Once saved, changes are written automatically and loaded on every start.</p>
+    <p class="hint">Saves the connection (including the token, in plain text), JQL, displayed fields, pinned tasks (with their per day hours) and the working day settings to a JSON file next to the script. Once saved, changes are written automatically and loaded on every start.</p>
     <div class="row"><button class="btn" id="c-savecfg">Save to config file</button> <span data-cfg></span></div>
-  </div>
-</section>
-
-<section class="tab" id="t-sched">
-  <h2>Schedule</h2>
-  <div class="seg">
-    <h3>Period</h3>
-    <div class="row">
-      <label>From<input type="date" data-b="sched.from"></label>
-      <label>To<input type="date" data-b="sched.to"></label>
-      <label class="grow">Days off / holidays (YYYY-MM-DD, comma-separated)<input data-b="sched.exclude" placeholder="2026-11-04, 2026-11-05"></label>
-    </div>
   </div>
   <details class="seg fold" open>
     <summary>Working day<span class="sub" id="s-wd-sum"></span></summary>
@@ -274,9 +266,6 @@ header .quit { margin-left:auto; }
       <label>Step, min<select data-b="sched.step"><option>5</option><option>10</option><option>15</option><option>30</option><option>60</option></select></label>
     </div>
     <div class="days" id="s-days"></div>
-    <div class="row" style="margin-top:12px">
-      <button class="btn" id="s-savecfg">Save to config file</button> <span data-cfg></span>
-    </div>
   </details>
 </section>
 
@@ -285,7 +274,7 @@ header .quit { margin-left:auto; }
   <details class="seg fold">
   <summary>How this works</summary>
   <ul class="help">
-    <li><b>Total</b>: hours spread across the working days of the period.</li>
+    <li><b>Total</b>: hours spread across the working days of the period. If left empty, the task's original estimate from Jira is used (shown in italics; 0 if it has none). Type 0 to track nothing.</li>
     <li><b>Per day</b>: hours logged on every working day.</li>
     <li><b>Timing</b>: how Total is spread: evenly, towards the start, middle or end, or a random share per day.</li>
     <li><b>Range</b>: which days a task can be tracked on. It is preset when tasks are loaded, based on the task's status history; change it per task if needed.
@@ -294,18 +283,43 @@ header .quit { margin-left:auto; }
         <li><b>Whole period</b>: every working day of the period. Preset if it does not.</li>
       </ul>
     </li>
-    <li><b>Pin</b>: always keep the task in the list.</li>
+    <li><b>Pin</b>: pinned tasks (and their Per day hours) are saved to the config file; on start only pinned tasks are shown.</li>
     <li><b>Hours formats</b>: 8, 1.5, 1:30, 1h 30m, 45m.</li>
   </ul>
   </details>
-  <div class="seg">
-    <h3>Task source</h3>
+  <details class="seg fold">
+    <summary>Task tracking window<span class="sub" id="s-tw-sum"></span></summary>
     <div class="row">
-      <label class="grow">JQL<input id="k-jql" data-b="jql"></label>
-      <button class="btn pri" id="k-load">Load tasks</button>
+      <label>Status 1 (start)<select id="t-from" data-b="track.from"></select></label>
+      <label>Status 2 (end)<select id="t-to" data-b="track.to"></select></label>
+      <button class="btn" id="t-load">Load statuses</button> <span id="t-st"></span>
+    </div>
+    <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="t-on" style="margin:0"> Show only tasks inside the tracking window</label>
+    <p class="hint">The window of a task is from its first move into status 1 to its first move into status 2 (still open if it has not moved there yet).</p>
+    <p class="hint">With the checkbox on, only tasks whose window overlaps the Period are listed. In Task window mode a task is tracked only on working days inside its window. Changing a status re-reads the history of the loaded tasks.</p>
+  </details>
+  <details class="seg fold">
+    <summary>Distribution options<span class="sub" id="s-do-sum"></span></summary>
+    <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="s-varied" style="margin:0"> Realistic spread (different hours on different days; recalculate for a new variation)</label>
+  </details>
+  <details class="seg fold" open>
+    <summary>Period<span class="sub" id="s-per-sum"></span></summary>
+    <div class="row">
+      <label>From<input type="date" data-b="sched.from"></label>
+      <label>To<input type="date" data-b="sched.to"></label>
     </div>
     <div class="row">
-      <div>Fields: <span id="k-fields"></span></div>
+      <label class="grow">Days off / holidays (YYYY-MM-DD, comma-separated)<input data-b="sched.exclude" placeholder="2026-11-04, 2026-11-05"></label>
+      <label class="grow">Extra working days (YYYY-MM-DD, comma-separated)<input data-b="sched.include" placeholder="2026-11-08, 2026-11-15"></label>
+    </div>
+  </details>
+  <details class="seg fold" open>
+    <summary>Task source</summary>
+    <div class="row">
+      <label class="grow">JQL<input id="k-jql" data-b="jql"></label>
+    </div>
+    <div class="row">
+      <div class="grow"><div class="lbl">Fields</div><div class="chips" id="k-fields"></div></div>
       <label>Add field<input id="k-addfield" list="k-fieldlist" placeholder="name or id"></label>
       <datalist id="k-fieldlist"></datalist>
       <button class="btn" id="k-addbtn">+</button>
@@ -314,31 +328,24 @@ header .quit { margin-left:auto; }
       <label>Add task by key<input id="k-key" placeholder="PROJ-123"></label>
       <button class="btn" id="k-keybtn">Add</button>
     </div>
-  </div>
-  <details class="seg fold">
-    <summary>Task tracking window<span class="sub" id="s-tw-sum"></span></summary>
-    <div class="row">
-      <label>Status 1 (start)<select id="t-from" data-b="track.from"></select></label>
-      <label>Status 2 (end)<select id="t-to" data-b="track.to"></select></label>
-      <button class="btn" id="t-load">Load statuses</button> <span id="t-st"></span>
-    </div>
-    <p class="hint">A task in Task window mode is tracked only on working days from its first move into status 1 to its first move into status 2 (inclusive), within the selected period. Tasks that never entered status 1 use the whole period. Changing a status re-reads the history of the loaded tasks.</p>
   </details>
-  <details class="seg fold">
-    <summary>Distribution options<span class="sub" id="s-do-sum"></span></summary>
-    <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="s-varied" style="margin:0"> Realistic spread (different hours on different days; recalculate for a new variation)</label>
-  </details>
+  <div class="row"><button class="btn pri" id="k-load">Load tasks</button></div>
   <div class="seg">
     <h3>Tasks</h3>
     <div class="row">
       <label>Filter<input id="k-filter" placeholder="text"></label>
+      <label>Filter by<select id="k-ffield"></select></label>
       <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-only" style="margin:0"> only with hours</label>
+      <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-pinned" style="margin:0" checked> only pinned</label>
     </div>
     <div id="k-status"></div>
     <div style="overflow:auto;margin-bottom:12px"><table id="k-table"></table></div>
   </div>
   <div class="stat" id="s-stat"></div>
-  <button class="btn pri" id="s-calc">Calculate distribution</button> <span id="s-calcst"></span>
+  <div class="row split">
+    <div><button class="btn pri" id="s-calc">Calculate distribution</button> <span id="s-calcst"></span></div>
+    <button class="btn" id="k-clear" title="Remove loaded tasks, hours and cached task history">Clear data</button>
+  </div>
 </section>
 
 <section class="tab" id="t-prev">
@@ -393,11 +400,11 @@ const DEF = {
   jql: 'assignee = currentUser() ORDER BY updated DESC',
   fields: [{ id: 'summary', name: 'Summary' }],
   pinned: [],
-  track: { from: 'In Progress', to: 'Done' },
+  track: { from: 'In Progress', to: 'Done', on: true },
   windows: {},
   plan: {},
   issues: [],
-  sched: { from: monthStart, to: today, dayStart: '10:00', dayEnd: '19:00', breakStart: '13:00', breakEnd: '14:00', step: '15', days: [1, 2, 3, 4, 5], exclude: '', varied: false },
+  sched: { from: monthStart, to: today, dayStart: '10:00', dayEnd: '19:00', breakStart: '13:00', breakEnd: '14:00', step: '15', days: [1, 2, 3, 4, 5], exclude: '', include: '', varied: false },
   clear: { from: monthStart, to: today },
 };
 let S;
@@ -407,7 +414,8 @@ try {
   S.sched = { ...DEF.sched, ...saved.sched };
   S.clear = { ...DEF.clear, ...saved.clear };
   S.conn = { ...DEF.conn, ...saved.conn };
-  S.track = { from: saved.track?.from || DEF.track.from, to: saved.track?.to || DEF.track.to };
+  delete S.dfilter;
+  S.track = { from: saved.track?.from || DEF.track.from, to: saved.track?.to || DEF.track.to, on: saved.track?.on !== false };
 } catch { S = structuredClone(DEF); }
 const CFG_KEYS = ['conn', 'jql', 'fields', 'pinned', 'track'];
 const WORKDAY_KEYS = ['dayStart', 'dayEnd', 'breakStart', 'breakEnd', 'step', 'days', 'varied'];
@@ -422,6 +430,7 @@ const cfgStatus = (text, cls) => document.querySelectorAll('[data-cfg]').forEach
 async function saveConfig() {
   try {
     const body = Object.fromEntries(CFG_KEYS.map((k) => [k, S[k]]));
+    body.pinned = S.pinned.map((key) => ({ key, perDay: S.plan[key]?.fixed || '' }));
     body.workday = Object.fromEntries(WORKDAY_KEYS.map((k) => [k, S.sched[k]]));
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -442,7 +451,17 @@ async function loadConfig() {
     if (c.conn && typeof c.conn === 'object') S.conn = { ...DEF.conn, ...c.conn };
     if (typeof c.jql === 'string' && c.jql) S.jql = c.jql;
     if (Array.isArray(c.fields) && c.fields.every((f) => f && f.id)) S.fields = c.fields.map((f) => ({ id: String(f.id), name: String(f.name || f.id) }));
-    if (Array.isArray(c.pinned)) S.pinned = c.pinned.map(String);
+    if (Array.isArray(c.pinned)) {
+      const items = c.pinned.map((p) => (p && typeof p === 'object' ? p : { key: p })).filter((p) => p.key);
+      S.pinned = items.map((p) => String(p.key));
+      items.forEach((p) => {
+        if (typeof p.perDay !== 'string' && typeof p.perDay !== 'number') return;
+        const k = String(p.key);
+        const pl = (S.plan[k] ??= { total: '', fixed: '', shift: '', range: '' });
+        pl.fixed = String(p.perDay);
+        if (!pl.total && !pl.fixed && !pl.shift && !pl.range) delete S.plan[k];
+      });
+    }
     const w = c.workday;
     if (w && typeof w === 'object') {
       ['dayStart', 'dayEnd', 'breakStart', 'breakEnd'].forEach((k) => { if (typeof w[k] === 'string') S.sched[k] = w[k]; });
@@ -454,6 +473,7 @@ async function loadConfig() {
     if (tr && typeof tr === 'object') {
       if (typeof tr.from === 'string' && tr.from) S.track.from = tr.from;
       if (typeof tr.to === 'string' && tr.to) S.track.to = tr.to;
+      if (typeof tr.on === 'boolean') S.track.on = tr.on;
     }
     cfgOn = true;
     cfgStatus('Loaded from ' + j.path, 'okc');
@@ -468,6 +488,7 @@ let P = null;      // preview: { entries, warnings }
 let found = null;  // worklogs found for clearing
 let busy = false;
 let catalog = null;
+let catalogTried = false;
 
 // ---------- Jira API ----------
 class JErr extends Error { constructor(m, status) { super(m); this.status = status; } }
@@ -476,7 +497,7 @@ const baseUrl = () => S.conn.base;
 
 async function jira(method, path, body) {
   const c = S.conn;
-  if (!c.base || !c.email || !c.token) throw new JErr('Fill in the Connection tab first', 0);
+  if (!c.base || !c.email || !c.token) throw new JErr('Fill in the Setup tab first', 0);
   const r = await fetch('/api/jira', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Track-Token': TRACK_TOKEN },
@@ -501,8 +522,17 @@ async function searchIssues(jql, fields) {
   return out;
 }
 
+const fieldIds = () => [...new Set([...S.fields.map((f) => f.id), 'created', 'timeoriginalestimate'])];
+
+async function loadPinned(onProgress) {
+  if (!S.pinned.length) { S.issues = []; save(); return; }
+  S.issues = await searchIssues(`key in (${S.pinned.map((k) => '"' + k + '"').join(',')})`, fieldIds());
+  await loadWindows(S.issues.map((i) => i.key), onProgress);
+  save();
+}
+
 async function loadIssues(onProgress) {
-  const ids = [...new Set([...S.fields.map((f) => f.id), 'created'])];
+  const ids = fieldIds();
   let list = await searchIssues(S.jql, ids);
   const have = new Set(list.map((i) => i.key));
   const want = [...new Set([...S.pinned, ...Object.keys(S.plan)])];
@@ -529,6 +559,18 @@ function val(v) {
   return String(v);
 }
 
+let pinnedOnly = true;
+const viewIssues = () => S.issues.filter((i) => (pinnedOnly ? S.pinned.includes(i.key) : inTrackWindow(i.key)));
+const estMin = (key) => Math.round((S.issues.find((i) => i.key === key)?.fields?.timeoriginalestimate || 0) / 60);
+const fmtH = (m) => (m % 60 ? `${Math.floor(m / 60)}:${pad(m % 60)}` : String(m / 60));
+// Plan with Total defaulted to the original estimate for the tasks in view when the user has not entered one.
+function planOf() {
+  const out = {};
+  for (const i of viewIssues()) { const m = estMin(i.key); if (m) out[i.key] = { total: fmtH(m) }; }
+  for (const [k, p] of Object.entries(S.plan)) out[k] = { ...p, total: p.total || out[k]?.total || '' };
+  return out;
+}
+
 const sumOf = (key) => val(S.issues.find((i) => i.key === key)?.fields?.summary);
 const link = (key) => `<a href="${esc(baseUrl())}/browse/${esc(key)}" target="_blank" rel="noopener">${esc(key)}</a>`;
 const setStatus = (el, text, cls) => { el.className = cls || ''; el.textContent = text; };
@@ -539,7 +581,7 @@ function show(tab) {
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   syncInputs();
   if (tab === 'tasks') { renderTasks(); renderTrackOptions(); }
-  if (tab === 'sched') renderSched();
+  if (tab === 'conn') renderSched();
   if (tab === 'prev') renderPreview();
   if (tab === 'clear') renderClear();
 }
@@ -554,6 +596,7 @@ document.addEventListener('input', (e) => {
   setPath(el.dataset.b, el.value);
   save();
   if (el.dataset.b.startsWith('sched') || el.dataset.b.startsWith('track.')) renderStats();
+  if (el.dataset.b.startsWith('sched.')) renderTasks();
   if (el.dataset.b.startsWith('track.') && S.conn.token && S.issues.length) refreshWindows();
 });
 
@@ -595,27 +638,56 @@ function renderTasks() {
   renderFields();
   const filter = $('#k-filter').value.trim().toLowerCase();
   const only = $('#k-only').checked;
-  const head = '<tr><th>Key</th>' + S.fields.map((f) => `<th>${esc(f.name)}</th>`).join('') + '<th class="num">Total</th><th class="num">Per day</th><th>Timing</th><th>Range</th><th>Pin</th></tr>';
-  const rows = S.issues.map((i) => {
+  $('#k-pinned').checked = pinnedOnly;
+  const ff = $('#k-ffield');
+  const fopts = [['__key', 'Key'], ...S.fields.map((f) => [f.id, f.name])];
+  let fcur = ff.value;
+  if (!fopts.some((o) => o[0] === fcur)) fcur = S.fields.some((f) => f.id === 'summary') ? 'summary' : fopts[fopts.length > 1 ? 1 : 0][0];
+  ff.innerHTML = fopts.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join('');
+  ff.value = fcur;
+  const head = '<tr><th>Key</th>' + S.fields.map((f) => `<th>${esc(f.name)}</th>`).join('') + '<th class="num">Total</th><th class="num">Per day</th><th>Timing</th><th>Range</th><th>Tracking window</th><th>Pin</th></tr>';
+  const visible = viewIssues();
+  const rows = visible.map((i) => {
     const p = S.plan[i.key] || {};
+    const est = estMin(i.key);
+    const tot = p.total || (est ? fmtH(est) : '');
     const cells = S.fields.map((f) => { const v = val(i.fields?.[f.id]); return `<td>${esc(v.length > 200 ? v.slice(0, 200) + '…' : v)}</td>`; }).join('');
-    const hay = (i.key + ' ' + S.fields.map((f) => val(i.fields?.[f.id])).join(' ')).toLowerCase();
+    const hay = (fcur === '__key' ? i.key : val(i.fields?.[fcur])).toLowerCase();
     if (filter && !hay.includes(filter)) return '';
-    if (only && !(p.total || p.fixed)) return '';
+    if (only && !(tot || p.fixed)) return '';
     return `<tr><td>${link(i.key)}</td>${cells}` +
-      `<td class="num"><input data-k="${esc(i.key)}" data-f="total" value="${esc(p.total || '')}" placeholder="0"></td>` +
+      `<td class="num"><input${!p.total && est ? ' class="sug"' : ''} data-k="${esc(i.key)}" data-f="total" value="${esc(tot)}" placeholder="0"${est ? ` title="Original estimate: ${esc(fmtD(est))}"` : ''}></td>` +
       `<td class="num"><input data-k="${esc(i.key)}" data-f="fixed" value="${esc(p.fixed || '')}" placeholder="0"></td>` +
       `<td><select data-k="${esc(i.key)}" data-f="shift">${SHIFTS.map(([v, l]) => `<option value="${v}"${(p.shift || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
       `<td><select data-k="${esc(i.key)}" data-f="range">${RANGES.map(([v, l]) => `<option value="${v}"${effRange(i.key) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
+      `<td class="tw" style="white-space:nowrap">${esc(twText(i.key))}</td>` +
       `<td><input type="checkbox" style="width:auto" data-pin="${esc(i.key)}"${S.pinned.includes(i.key) ? ' checked' : ''}></td></tr>`;
   }).join('');
   $('#k-table').innerHTML = head + rows;
-  $('#k-status').innerHTML = S.issues.length ? `<p class="hint">Tasks: ${S.issues.length}. ${planSummary()}</p>` : '<p class="hint">Click "Load tasks".</p>';
+  $('#k-status').innerHTML = visible.length ? `<p class="hint">${tasksCount(visible)}. ${planSummary()}</p>` : `<p class="hint">${pinnedOnly ? 'No pinned tasks. Untick "only pinned" or click "Load tasks", then pin the ones you need.' : 'Click "Load tasks".'}</p>`;
+}
+
+// Dates are shown only for the "Task window" range; a single date when start and end are the same day.
+function twText(key) {
+  if (effRange(key) !== 'window' || !winValid(key)) return '';
+  const { start, end } = S.windows[key];
+  if (!start) return '';
+  return end === start ? start : `${start} – ${end || 'now'}`;
+}
+
+const tasksCount = (visible) => `Tasks: ${visible.length}${visible.length < S.issues.length ? ' of ' + S.issues.length : ''}`;
+
+// A task is inside the tracking window when its status 1 → status 2 span overlaps the Period.
+function inTrackWindow(key) {
+  if (!S.track.on) return true;
+  const w = winValid(key) ? S.windows[key] : null;
+  return !!(w && w.start && w.start <= S.sched.to && (!w.end || w.end >= S.sched.from));
 }
 
 function planSummary() {
-  const t = Object.values(S.plan).reduce((a, p) => a + (parseH(p.total) || 0), 0);
-  const f = Object.values(S.plan).reduce((a, p) => a + (parseH(p.fixed) || 0), 0);
+  const plan = Object.values(planOf());
+  const t = plan.reduce((a, p) => a + (parseH(p.total) || 0), 0);
+  const f = plan.reduce((a, p) => a + (parseH(p.fixed) || 0), 0);
   return `To distribute: ${fmtD(t)}; fixed per day: ${fmtD(f)}.`;
 }
 
@@ -625,10 +697,12 @@ $('#k-table').addEventListener('input', (e) => {
   const p = (S.plan[el.dataset.k] ??= { total: '', fixed: '', shift: '', range: '' });
   p[el.dataset.f] = el.value.trim();
   if (el.tagName === 'INPUT') el.classList.toggle('bad', Number.isNaN(parseH(el.value)));
+  if (el.dataset.f === 'total') el.classList.remove('sug');
   if (!p.total && !p.fixed && !p.shift && !p.range) delete S.plan[el.dataset.k];
   save();
+  if (el.dataset.f === 'range') { const c = el.closest('tr').querySelector('.tw'); if (c) c.textContent = twText(el.dataset.k); }
   const hint = $('#k-status .hint');
-  if (hint) hint.textContent = `Tasks: ${S.issues.length}. ${planSummary()}`;
+  if (hint) hint.textContent = `${tasksCount(viewIssues())}. ${planSummary()}`;
 });
 $('#k-table').addEventListener('change', (e) => {
   const key = e.target.dataset.pin;
@@ -638,14 +712,27 @@ $('#k-table').addEventListener('change', (e) => {
   save();
 });
 $('#k-filter').oninput = renderTasks;
+$('#k-ffield').onchange = renderTasks;
 $('#k-only').onchange = renderTasks;
+$('#k-pinned').onchange = (e) => { pinnedOnly = e.target.checked; reload(); };
+$('#k-clear').onclick = () => {
+  if (!confirm('Remove loaded tasks, entered hours, cached task history and the current distribution from this browser?')) return;
+  S.issues = [];
+  S.plan = {};
+  S.windows = {};
+  P = null;
+  save();
+  renderTasks();
+  renderStats();
+  setStatus($('#s-calcst'), '');
+};
 
 async function reload() {
   const st = $('#k-status');
   setStatus(st, 'Loading...');
-  try { await loadIssues((d, n) => setStatus(st, `Reading task history ${d}/${n}...`)); renderTasks(); } catch (e) { setStatus(st, e.message, 'err'); }
+  try { await (pinnedOnly ? loadPinned : loadIssues)((d, n) => setStatus(st, `Reading task history ${d}/${n}...`)); renderTasks(); } catch (e) { setStatus(st, e.message, 'err'); }
 }
-$('#k-load').onclick = reload;
+$('#k-load').onclick = () => { pinnedOnly = false; reload(); };
 
 $('#k-fields').onclick = (e) => {
   const b = e.target.closest('[data-rmf]');
@@ -655,7 +742,7 @@ $('#k-fields').onclick = (e) => {
   renderTasks();
 };
 
-$('#k-addfield').onfocus = async () => {
+async function loadCatalog() {
   if (catalog) return;
   try {
     catalog = await jira('GET', '/rest/api/3/field');
@@ -663,11 +750,20 @@ $('#k-addfield').onfocus = async () => {
   } catch {
     // the error is shown when adding
   }
+}
+$('#k-addfield').onfocus = loadCatalog;
+
+$('#t-on').onchange = (e) => {
+  S.track.on = e.target.checked;
+  save();
+  renderTasks();
+  renderStats();
+  if (S.track.on && S.conn.token && S.issues.length) refreshWindows();
 };
 $('#k-addbtn').onclick = async () => {
   const q = $('#k-addfield').value.trim().toLowerCase();
   if (!q) return;
-  if (!catalog) await $('#k-addfield').onfocus();
+  await loadCatalog();
   const f = (catalog || []).find((x) => x.name.toLowerCase() === q || x.id.toLowerCase() === q);
   if (!f) return setStatus($('#k-status'), 'Field not found', 'err');
   if (!S.fields.some((x) => x.id === f.id)) S.fields.push({ id: f.id, name: f.name });
@@ -681,7 +777,7 @@ $('#k-keybtn').onclick = async () => {
   if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) return setStatus($('#k-status'), 'Invalid issue key', 'err');
   const had = S.pinned.includes(key);
   if (!had) S.pinned.push(key);
-  try { await loadIssues(); $('#k-key').value = ''; renderTasks(); } catch (e) {
+  try { await (pinnedOnly ? loadPinned : loadIssues)(); $('#k-key').value = ''; renderTasks(); } catch (e) {
     if (!had) S.pinned = S.pinned.filter((k) => k !== key);
     setStatus($('#k-status'), e.message, 'err');
   }
@@ -690,7 +786,9 @@ $('#k-keybtn').onclick = async () => {
 // ---------- 2. schedule ----------
 function renderTrackOptions() {
   if (!statusList.length && !statusTried && S.conn.token) { statusTried = true; loadStatuses(true); }
+  if (!catalog && !catalogTried && S.conn.token) { catalogTried = true; loadCatalog(); }
   $('#s-varied').checked = !!S.sched.varied;
+  $('#t-on').checked = !!S.track.on;
   renderStats();
 }
 function renderSched() {
@@ -699,7 +797,6 @@ function renderSched() {
   renderStats();
 }
 $('#s-varied').onchange = (e) => { S.sched.varied = e.target.checked; save(); renderStats(); };
-$('#s-savecfg').onclick = () => { cfgOn = true; save(); };
 
 let statusList = [];
 let statusTried = false;
@@ -768,10 +865,11 @@ async function refreshWindows() {
   const st = $('#t-st');
   await loadWindows(S.issues.map((i) => i.key), (d, n) => setStatus(st, `Updating task history ${d}/${n}...`));
   setStatus(st, 'Task history updated', 'okc');
+  renderTasks();
 }
 
 async function ensureWindows() {
-  const keys = Object.entries(S.plan)
+  const keys = Object.entries(planOf())
     .filter(([, p]) => (parseH(p.total) > 0 || parseH(p.fixed) > 0) && p.range !== 'period')
     .map(([k]) => k);
   await loadWindows(keys, (d, n) => setStatus($('#s-calcst'), `Reading task history ${d}/${n}...`), true);
@@ -786,12 +884,13 @@ $('#s-days').onchange = (e) => {
 };
 
 function workDays() {
-  const { from, to, days, exclude } = S.sched;
+  const { from, to, days, exclude, include } = S.sched;
   const ex = new Set(exclude.split(/[\s,;]+/).filter(Boolean));
+  const inc = new Set(include.split(/[\s,;]+/).filter(Boolean));
   const out = [];
   if (!from || !to) return out;
   for (let d = pYmd(from), n = 0; ymd(d) <= to && n < 400; d.setDate(d.getDate() + 1), n++) {
-    if (days.includes(d.getDay()) && !ex.has(ymd(d))) out.push(ymd(d));
+    if ((days.includes(d.getDay()) || inc.has(ymd(d))) && !ex.has(ymd(d))) out.push(ymd(d));
   }
   return out;
 }
@@ -824,7 +923,7 @@ function layout() {
   const step = Number(S.sched.step) || 15;
   const units = (m) => Math.max(1, Math.round(m / step));
   const warnings = [];
-  const tasks = Object.entries(S.plan)
+  const tasks = Object.entries(planOf())
     .map(([key, p]) => ({ key, total: parseH(p.total) || 0, fixed: parseH(p.fixed) || 0, shift: p.shift || '', range: p.range || defaultRange(key) }))
     .filter((t) => t.total > 0 || t.fixed > 0);
   const ranges = {};
@@ -902,13 +1001,14 @@ function renderStats() {
   const s = S.sched;
   const wd = [1, 2, 3, 4, 5, 6, 0].filter((d) => s.days.includes(d)).map((d) => WD[d]).join(', ');
   $('#s-wd-sum').textContent = `${s.dayStart}–${s.dayEnd}${s.breakStart && s.breakEnd ? `, break ${s.breakStart}–${s.breakEnd}` : ''} · ${wd || 'no days'}`;
-  $('#s-tw-sum').textContent = `${S.track.from} → ${S.track.to}`;
+  $('#s-tw-sum').textContent = `${S.track.from} → ${S.track.to}${S.track.on ? '' : ' · filter off'}`;
+  $('#s-per-sum').textContent = `${s.from} → ${s.to}`;
   $('#s-do-sum').textContent = s.varied ? 'Realistic spread' : '';
   const el = $('#s-stat');
   const g = dayGeometry();
   const days = workDays();
   if (!g || !days.length) { el.textContent = 'Check the period and working day times'; return; }
-  const tasks = Object.values(S.plan);
+  const tasks = Object.values(planOf());
   const total = tasks.reduce((a, p) => a + (parseH(p.total) || 0) + (parseH(p.fixed) || 0) * days.length, 0);
   const capTotal = days.length * g.len;
   el.innerHTML = `Working days: <b>${days.length}</b> · per day: <b>${fmtD(g.len)}</b> · available: <b>${fmtD(capTotal)}</b> · planned: <b class="${total > capTotal ? 'err' : ''}">${fmtD(total)}</b>`;
@@ -1157,6 +1257,7 @@ $('#x-box').addEventListener('click', async (e) => {
   renderStatusOptions();
   localStorage.setItem(LS, JSON.stringify(S));
   show(cfgOn ? 'tasks' : 'conn');
+  if (cfgOn && S.conn.token && S.pinned.length) reload();
 })();
 </script>
 </body>

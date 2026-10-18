@@ -195,6 +195,22 @@ details.seg:not([open]) > summary { margin-bottom:0; }
 .done td { opacity:.55; }
 a { color:var(--acc); text-decoration:none; }
 progress { width:200px; vertical-align:middle; }
+.views { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; margin-left:auto; }
+.views button { border:0; background:var(--card); color:var(--mut); padding:7px 14px; cursor:pointer; font:inherit; }
+.views button.on { background:var(--acc); color:#fff; }
+.ptable { width:auto; min-width:100%; }
+.ptable th.c, .ptable td.c { text-align:center; white-space:nowrap; padding:4px 8px; border-left:1px solid var(--line); }
+.ptable th.c small { display:block; font-weight:400; }
+.ptable .stk { position:sticky; left:0; background:var(--card); z-index:1; white-space:nowrap; }
+.ptable td.sum { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ptable td.has { background:color-mix(in srgb, var(--acc) 14%, transparent); }
+.ptable td.sent { color:var(--ok); }
+.ptable td.rm { cursor:pointer; }
+.ptable td.rm:hover { background:color-mix(in srgb, var(--bad) 22%, transparent); }
+.ltable td.sum { width:100%; }
+.ltable td.num { text-align:right; }
+.ptable td.fail { color:var(--bad); }
+.ptable tfoot td { font-weight:600; border-top:2px solid var(--line); }
 </style>
 </head>
 <body>
@@ -462,7 +478,7 @@ async function searchIssues(jql, fields) {
 }
 
 async function loadIssues(onProgress) {
-  const ids = S.fields.map((f) => f.id);
+  const ids = [...new Set([...S.fields.map((f) => f.id), 'created'])];
   let list = await searchIssues(S.jql, ids);
   const have = new Set(list.map((i) => i.key));
   const want = [...new Set([...S.pinned, ...Object.keys(S.plan)])];
@@ -880,7 +896,7 @@ $('#s-calc').onclick = async () => {
   const r = layout();
   if (r.error) return alert(r.error);
   if (!r.entries.length) return alert('No tasks with hours. Fill in hours on the Tasks tab.');
-  P = { entries: r.entries, warnings: r.warnings, ranges: r.ranges };
+  P = { entries: r.entries, warnings: r.warnings, ranges: r.ranges, days: r.days };
   show('prev');
 };
 
@@ -893,9 +909,62 @@ function jiraStarted(date, min) {
   return `${ymd(dt)}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:00.000${off >= 0 ? '+' : '-'}${pad(Math.floor(a / 60))}${pad(a % 60)}`;
 }
 
+let pView = 'table';
+
+// Sorted by the first move into the tracking status, then by creation date.
+function taskOrder(keys) {
+  const date = (k) => {
+    if (winValid(k) && S.windows[k].start) return S.windows[k].start;
+    const c = S.issues.find((i) => i.key === k)?.fields?.created;
+    return c ? ymd(parseJiraDate(c)) : '9999-99-99';
+  };
+  return keys.map((k) => [k, date(k)])
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0], undefined, { numeric: true }))
+    .map((x) => x[0]);
+}
+
+function previewTable() {
+  const days = P.days;
+  const cell = {}, dayTot = {}, taskTot = {};
+  P.entries.forEach((e) => {
+    const c = ((cell[e.key] ??= {})[e.date] ??= { min: 0, n: 0, done: 0, err: '', t: [] });
+    c.min += e.min; c.n++; c.t.push(`${fmtT(e.start)}–${fmtT(e.start + e.min)}`);
+    if (e.done) c.done++;
+    if (e.err) c.err = e.err;
+    dayTot[e.date] = (dayTot[e.date] || 0) + e.min;
+    taskTot[e.key] = (taskTot[e.key] || 0) + e.min;
+  });
+  const groups = (f) => {
+    const out = [];
+    days.forEach((d) => { const k = f(d), l = out[out.length - 1]; if (l && l.k === k) l.n++; else out.push({ k, n: 1 }); });
+    return out;
+  };
+  const monthName = (k) => new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 1).toLocaleString('en', { month: 'short' });
+  const head =
+    `<tr><th rowspan="3" class="stk">Task</th><th rowspan="3">Summary</th><th rowspan="3" class="num">Total</th>` +
+    groups((d) => d.slice(0, 4)).map((g) => `<th class="c" colspan="${g.n}">${g.k}</th>`).join('') + '</tr>' +
+    '<tr>' + groups((d) => d.slice(0, 7)).map((g) => `<th class="c" colspan="${g.n}">${monthName(g.k)}</th>`).join('') + '</tr>' +
+    '<tr>' + days.map((d) => `<th class="c" title="${d}">${d.slice(8)}<small>${WD[pYmd(d).getDay()]}</small></th>`).join('') + '</tr>';
+  const body = taskOrder(Object.keys(taskTot)).map((k) => {
+    const tds = days.map((d) => {
+      const c = cell[k]?.[d];
+      if (!c) return '<td class="c"></td>';
+      const cls = c.err ? 'fail' : c.done === c.n ? 'sent' : '';
+      const rm = c.done < c.n && !busy;
+      return `<td class="c has ${cls}${rm ? ' rm' : ''}"${rm ? ` data-rmcell="${esc(k)}|${d}"` : ''} title="${esc(c.t.join(', ') + (c.err ? ' — ' + c.err : '') + (rm ? ' (click to remove)' : ''))}">${fmtD(c.min)}</td>`;
+    }).join('');
+    return `<tr><td class="stk">${link(k)}</td><td class="sum" title="${esc(sumOf(k))}">${esc(sumOf(k))}</td><td class="num">${fmtD(taskTot[k])}</td>${tds}</tr>`;
+  }).join('');
+  const foot = `<tr><td class="stk">Total</td><td></td><td class="num">${fmtD(P.entries.reduce((a, e) => a + e.min, 0))}</td>` +
+    days.map((d) => `<td class="c">${dayTot[d] ? fmtD(dayTot[d]) : ''}</td>`).join('') + '</tr>';
+  return `<div class="pscroll" style="overflow:auto"><table class="ptable"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
+}
+
 function renderPreview() {
   const box = $('#p-box');
   if (!P) { box.innerHTML = '<p class="hint">Calculate the distribution on the Schedule tab first.</p>'; return; }
+  const oldScroll = box.querySelector('.pscroll');
+  const sx = oldScroll ? oldScroll.scrollLeft : 0, sy = oldScroll ? oldScroll.scrollTop : 0;
   const byDay = {};
   P.entries.forEach((e) => (byDay[e.date] ??= []).push(e));
   const total = P.entries.reduce((a, e) => a + e.min, 0);
@@ -905,22 +974,35 @@ function renderPreview() {
   const sumRows = Object.entries(per).map(([k, m]) => `<tr><td>${link(k)}</td><td>${esc(sumOf(k))}</td><td>${esc((P.ranges || {})[k] || '')}</td><td class="num">${fmtD(m)}</td></tr>`).join('');
   const days = Object.keys(byDay).sort().map((d) => {
     const es = byDay[d].sort((a, b) => a.start - b.start);
-    const rows = es.map((e) => `<tr class="${e.done ? 'done' : ''}"><td>${fmtT(e.start)}–${fmtT(e.start + e.min)}</td><td>${link(e.key)}</td><td>${esc(sumOf(e.key))}</td>` +
-      `<td class="num">${fmtD(e.min)}</td><td>${e.done ? '<span class="okc">sent</span>' : e.err ? `<span class="err" title="${esc(e.err)}">error: ${esc(e.err)}</span>` : `<button class="btn" data-rm="${e.id}" title="remove entry">×</button>`}</td></tr>`).join('');
-    return `<h3>${d} ${WD[pYmd(d).getDay()]}<small>${fmtD(es.reduce((a, e) => a + e.min, 0))}</small></h3><table>${rows}</table>`;
+    const rows = es.map((e) => `<tr class="${e.done ? 'done' : ''}"><td>${fmtT(e.start)}–${fmtT(e.start + e.min)}</td><td>${link(e.key)}</td><td class="sum">${esc(sumOf(e.key))}</td>` +
+      `<td class="num">${fmtD(e.min)}</td><td class="num">${e.done ? '<span class="okc">sent</span>' : e.err ? `<span class="err" title="${esc(e.err)}">error: ${esc(e.err)}</span>` : `<button class="btn" data-rm="${e.id}" title="remove entry" ${busy ? 'disabled' : ''}>×</button>`}</td></tr>`).join('');
+    return `<h3>${d} ${WD[pYmd(d).getDay()]}<small>${fmtD(es.reduce((a, e) => a + e.min, 0))}</small></h3><table class="ltable">${rows}</table>`;
   }).join('');
   box.innerHTML =
     (P.warnings.length ? `<ul class="warn">${P.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : '') +
     `<div class="stat">Entries: <b>${P.entries.length}</b> · total: <b>${fmtD(total)}</b> · sent: <b>${sent}</b></div>` +
     `<div class="row"><button class="btn pri" id="p-send" ${busy ? 'disabled' : ''}>Approve and send to Jira</button>` +
     (busy ? '<button class="btn danger" id="p-stop">Stop</button>' : '') +
-    `<button class="btn" id="p-recalc" ${busy ? 'disabled' : ''}>Recalculate</button><span id="p-status"></span></div>` +
-    `<h3>By task</h3><table>${sumRows}</table>` + days;
+    `<button class="btn" id="p-recalc" ${busy ? 'disabled' : ''}>Recalculate</button><span id="p-status"></span>` +
+    `<span class="views"><button data-view="table" class="${pView === 'table' ? 'on' : ''}">Table</button><button data-view="list" class="${pView === 'list' ? 'on' : ''}">List</button></span></div>` +
+    (pView === 'table' ? previewTable() : `<h3>By task</h3><table>${sumRows}</table>` + days);
+  const ns = box.querySelector('.pscroll');
+  if (ns) { ns.scrollLeft = sx; ns.scrollTop = sy; }
 }
 
 $('#p-box').addEventListener('click', (e) => {
   const rm = e.target.closest('[data-rm]');
-  if (rm) { P.entries = P.entries.filter((x) => x.id !== +rm.dataset.rm); renderPreview(); return; }
+  if (rm) { if (!busy) { P.entries = P.entries.filter((x) => x.id !== +rm.dataset.rm); renderPreview(); } return; }
+  const rc = e.target.closest('[data-rmcell]');
+  if (rc) {
+    if (busy) return;
+    const [k, d] = rc.dataset.rmcell.split('|');
+    P.entries = P.entries.filter((x) => !(x.key === k && x.date === d && !x.done));
+    renderPreview();
+    return;
+  }
+  const vw = e.target.closest('[data-view]');
+  if (vw) { pView = vw.dataset.view; renderPreview(); return; }
   if (e.target.id === 'p-send') send();
   if (e.target.id === 'p-stop') { stopReq = true; setStatus($('#p-status'), 'Stopping after the current request...'); }
   if (e.target.id === 'p-recalc') $('#s-calc').onclick();
@@ -947,6 +1029,8 @@ async function send() {
     } catch (x) {
       e.err = x.message; fail++;
       if (x.status === 401 || x.status === 0) break;
+    } finally {
+      renderPreview();
     }
   }
   busy = false;

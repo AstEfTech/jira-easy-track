@@ -122,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    port = int(os.environ.get('PORT') or 4777)
+    port = int(os.environ.get('JIRA_TRACK_PORT') or 4777)
     try:
         srv = ThreadingHTTPServer(('127.0.0.1', port), Handler)
     except OSError:

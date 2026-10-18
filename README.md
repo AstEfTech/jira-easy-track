@@ -1,9 +1,8 @@
 # Jira Easy Track
 
 Tired of tracking your jira time, splitting the task time between days manually?
-Here is a dead-simple Jira time tracker: one Python file, zero dependencies, **no activity monitoring**.
+Here is a dead-simple Jira time tracker: one Python file, zero dependencies. **No activity monitoring**, no background agent, no screenshots, no window or keystroke tracking, no timers running all day.
 
-No background agent, no screenshots, no window or keystroke tracking, no timers running all day.
 You tell it how many hours you spent on each task, and it spreads them across your working days and logs them to Jira, when you decide.
 
 ![me](media/Jira_Easy_Track.gif)

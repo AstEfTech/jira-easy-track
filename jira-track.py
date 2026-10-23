@@ -171,13 +171,19 @@ input.bad { border-color:var(--bad); }
 button.btn { font:inherit; padding:0 14px; height:34px; line-height:32px; vertical-align:middle; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
 button.pri { background:var(--acc); border-color:var(--acc); color:#fff; }
 button.danger { background:var(--bad); border-color:var(--bad); color:#fff; }
+button.sec { border-color:var(--acc); color:var(--acc); font-weight:500; }
+button.sec:not(:disabled):hover { background:color-mix(in srgb, var(--acc) 12%, var(--card)); }
+.btn.sec .busy::before { border-color:color-mix(in srgb, var(--acc) 30%, transparent); border-top-color:var(--acc); }
 button:disabled { opacity:.5; cursor:default; }
 .hint { color:var(--mut); font-size:12px; margin:6px 0; }
 .err { color:var(--bad); } .okc { color:var(--ok); }
 .busy::before { content:''; display:inline-block; width:12px; height:12px; margin-right:6px; vertical-align:-2px; border:2px solid var(--line); border-top-color:var(--acc); border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
-#x-del { width:17em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-#x-del .busy::before { border-color:rgba(255,255,255,.35); border-top-color:#fff; }
+/* Buttons that show their status in place of the label keep a fixed width that fits every text they show. */
+#c-test, #c-savecfg, #t-load, #k-load, #s-calc, #p-send, #p-recalc, #x-find, #x-del { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#c-test { width:11em; } #c-savecfg { width:13em; } #t-load { width:11em; } #k-load { width:12em; } #s-calc { width:14.5em; }
+#p-send { width:16em; } #p-recalc { width:12.5em; } #x-find { width:11.5em; } #x-del { width:15em; }
+.btn.pri .busy::before, .btn.danger .busy::before { border-color:rgba(255,255,255,.35); border-top-color:#fff; }
 table { border-collapse:collapse; width:100%; }
 th, td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
 th { color:var(--mut); font-weight:500; font-size:12px; }
@@ -258,12 +264,12 @@ header .quit { margin-left:auto; }
     <label>Email<input class="wide" id="c-email" autocomplete="off"></label>
     <label>API token<input class="wide" id="c-token" type="password" autocomplete="off"></label>
     <p class="hint">Create a token at id.atlassian.com/manage-profile/security/api-tokens. It is stored only in this browser's localStorage and is sent only to Jira through the local server.</p>
-    <div class="row"><button class="btn pri" id="c-test">Test and save</button> <span id="c-status"></span></div>
+    <div class="row"><button class="btn pri" id="c-test">Test and save</button></div>
   </div>
   <div class="seg">
     <h3>Config file</h3>
     <p class="hint">Saves the connection (including the token, in plain text), JQL, displayed fields, pinned tasks (with their per day hours) and the working day settings to a JSON file next to the script. Once saved, changes are written automatically and loaded on every start.</p>
-    <div class="row"><button class="btn" id="c-savecfg">Save to config file</button> <span data-cfg></span></div>
+    <div class="row"><button class="btn sec" id="c-savecfg">Save to config file</button></div>
   </div>
   <details class="seg fold" open>
     <summary>Working day<span class="sub" id="s-wd-sum"></span></summary>
@@ -302,7 +308,7 @@ header .quit { margin-left:auto; }
     <div class="row">
       <label>Status 1 (start)<select id="t-from" data-b="track.from"></select></label>
       <label>Status 2 (end)<select id="t-to" data-b="track.to"></select></label>
-      <button class="btn" id="t-load">Load statuses</button> <span id="t-st"></span>
+      <button class="btn" id="t-load">Load statuses</button>
     </div>
     <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="t-on" style="margin:0"> Show only tasks inside the tracking window</label>
     <p class="hint">The window of a task is from its first move into status 1 to its first move into status 2 (still open if it has not moved there yet).</p>
@@ -342,7 +348,7 @@ header .quit { margin-left:auto; }
       <button class="btn" id="k-keybtn">Add</button>
     </div>
   </details>
-  <div class="row" style="align-items:center"><button class="btn pri" id="k-load">Load tasks</button> <span id="k-loadst"></span></div>
+  <div class="row"><button class="btn pri" id="k-load">Load tasks</button></div>
   <div class="seg">
     <h3>Tasks</h3>
     <div class="row">
@@ -356,8 +362,8 @@ header .quit { margin-left:auto; }
   </div>
   <details class="stat" id="s-stat"><summary id="s-stat-sum"></summary><ul class="how" id="s-stat-how"></ul></details>
   <div class="row split">
-    <div><button class="btn pri" id="s-calc">Calculate distribution</button> <span id="s-calcst"></span></div>
-    <button class="btn" id="k-clear" title="Remove loaded tasks, hours and cached task history">Clear data</button>
+    <div><button class="btn pri" id="s-calc">Calculate distribution</button></div>
+    <button class="btn sec" id="k-clear" title="Remove loaded tasks, hours and cached task history">Clear data</button>
   </div>
 </section>
 
@@ -441,7 +447,7 @@ const save = () => {
   localStorage.setItem(LS, JSON.stringify(S));
   if (cfgOn) { clearTimeout(cfgTimer); cfgTimer = setTimeout(saveConfig, 500); }
 };
-const cfgStatus = (text, cls) => document.querySelectorAll('[data-cfg]').forEach((el) => setStatus(el, text, cls));
+const cfgStatus = (text, cls, title) => setBtn($('#c-savecfg'), text, cls, title);
 
 async function saveConfig() {
   try {
@@ -454,7 +460,7 @@ async function saveConfig() {
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(await r.text());
-    cfgStatus('Saved to ' + (await r.json()).path, 'okc');
+    cfgStatus('Saved', 'okc', 'Saved to ' + (await r.json()).path);
   } catch (e) { cfgStatus(e.message, 'err'); }
 }
 
@@ -494,7 +500,7 @@ async function loadConfig() {
       if (typeof tr.on === 'boolean') S.track.on = tr.on;
     }
     cfgOn = true;
-    cfgStatus('Loaded from ' + j.path, 'okc');
+    cfgStatus('Loaded', 'okc', 'Loaded from ' + j.path);
   } catch {
     // no config available, keep browser-stored state
   }
@@ -508,6 +514,7 @@ let xBusy = false;  // Clear tab: searching or deleting
 let P = null;      // preview: { entries, warnings }
 let found = null;  // worklogs found for clearing
 let busy = false;  // Preview tab: sending
+let pSendSt = null;  // Preview tab: status shown in the Approve button, { text, cls, title } or null
 let catalog = null;
 let catalogTried = false;
 
@@ -628,6 +635,18 @@ const sumOf = (key) => val(S.issues.find((i) => i.key === key)?.fields?.summary)
 const link = (key) => `<a href="${esc(baseUrl())}/browse/${esc(key)}" target="_blank" rel="noopener">${esc(key)}</a>`;
 const setStatus = (el, text, cls) => { el.className = cls || ''; el.textContent = text; };
 
+// A button shows its status in place of the label: a spinner while busy, "⚠" on errors.
+const btnHtml = (label, st) => (st ? `<span class="${st.cls === 'busy' ? 'busy' : ''}">${st.cls === 'err' ? '⚠ ' : ''}${esc(st.text)}</span>` : esc(label));
+// For buttons that stay in the page: results go back to the label after a while, errors stay until the next status.
+function setBtn(btn, text, cls, title) {
+  if (!btn) return;
+  if (btn.dataset.label == null) btn.dataset.label = btn.textContent;
+  clearTimeout(btn.revert);
+  btn.innerHTML = btnHtml(btn.dataset.label, text ? { text, cls } : null);
+  btn.title = title || (text && cls !== 'busy' ? text : '');
+  if (text && cls === 'okc') btn.revert = setTimeout(() => setBtn(btn, ''), 4000);
+}
+
 // ---------- tabs ----------
 function show(tab) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 't-' + tab));
@@ -668,12 +687,14 @@ function readConn() {
 $('#c-test').onclick = async () => {
   readConn();
   save();
-  const st = $('#c-status');
-  setStatus(st, 'Checking...');
+  const btn = $('#c-test');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  setBtn(btn, 'Checking...', 'busy');
   try {
     const me = await jira('GET', '/rest/api/3/myself');
-    setStatus(st, 'Connected: ' + me.displayName, 'okc');
-  } catch (e) { setStatus(st, e.message, 'err'); }
+    setBtn(btn, 'Connected', 'okc', 'Connected: ' + me.displayName);
+  } catch (e) { setBtn(btn, e.message, 'err'); } finally { btn.disabled = false; }
 };
 $('#c-savecfg').onclick = () => {
   readConn();
@@ -727,7 +748,7 @@ function renderTasks() {
   }).join('');
   $('#k-table').innerHTML = head + rows;
   if (S.conn.token && periodOk() && !trackedFresh()) scheduleTracked();
-  $('#k-status').innerHTML = visible.length ? `<p class="hint">${tasksCount(visible)}. ${planSummary()}</p>` : `<p class="hint">${pinnedOnly ? 'No pinned tasks. Untick "only pinned" or click "Load tasks", then pin the ones you need.' : 'Click "Load tasks".'}</p>`;
+  $('#k-status').innerHTML = visible.length ? '' : `<p class="hint">${pinnedOnly ? 'No pinned tasks. Untick "only pinned" or click "Load tasks", then pin the ones you need.' : 'Click "Load tasks".'}</p>`;
   renderStats();
 }
 
@@ -750,20 +771,11 @@ function twText(key) {
   return (end === start ? start : `${start} – ${end || 'now'}`) + avail;
 }
 
-const tasksCount = (visible) => `Tasks: ${visible.length}${visible.length < S.issues.length ? ' of ' + S.issues.length : ''}`;
-
 // A task is inside the tracking window when its status 1 → status 2 span overlaps the Period.
 function inTrackWindow(key) {
   if (!S.track.on) return true;
   const w = winValid(key) ? S.windows[key] : null;
   return !!(w && w.start && w.start <= S.sched.to && (!w.end || w.end >= S.sched.from));
-}
-
-function planSummary() {
-  const plan = Object.values(planOf());
-  const t = plan.reduce((a, p) => a + (parseH(p.total) || 0), 0);
-  const f = plan.reduce((a, p) => a + (parseH(p.fixed) || 0), 0);
-  return `To distribute: ${fmtD(t)}; fixed per day: ${fmtD(f)}.`;
 }
 
 $('#k-table').addEventListener('input', (e) => {
@@ -776,8 +788,6 @@ $('#k-table').addEventListener('input', (e) => {
   if (!p.total && !p.fixed && !p.shift && !p.range) delete S.plan[el.dataset.k];
   save();
   if (el.dataset.f === 'range') { const c = el.closest('tr').querySelector('.tw'); if (c) c.textContent = twText(el.dataset.k); }
-  const hint = $('#k-status .hint');
-  if (hint) hint.textContent = `${tasksCount(viewIssues())}. ${planSummary()}`;
   renderStats();
 });
 $('#k-table').addEventListener('change', (e) => {
@@ -803,19 +813,19 @@ $('#k-clear').onclick = () => {
   save();
   renderTasks();
   renderStats();
-  setStatus($('#s-calcst'), '');
+  setBtn($('#s-calc'), '');
 };
 
 async function reload() {
-  const st = $('#k-status'), ls = $('#k-loadst'), btn = $('#k-load');
-  setStatus(ls, 'Loading tasks...', 'busy');
+  const st = $('#k-status'), btn = $('#k-load');
+  setBtn(btn, 'Loading...', 'busy');
   btn.disabled = true;
   try {
-    await (pinnedOnly ? loadPinned : loadIssues)((d, n) => setStatus(ls, `Reading task history ${d}/${n}...`, 'busy'));
+    await (pinnedOnly ? loadPinned : loadIssues)((d, n) => setBtn(btn, `History ${d}/${n}`, 'busy', 'Reading task history'));
     renderTasks();
-  } catch (e) { setStatus(st, e.message, 'err'); } finally {
+    setBtn(btn, '');
+  } catch (e) { setStatus(st, e.message, 'err'); setBtn(btn, e.message, 'err'); } finally {
     btn.disabled = false;
-    setStatus(ls, '');
   }
 }
 $('#k-load').onclick = () => { pinnedOnly = false; reload(); };
@@ -902,16 +912,16 @@ function renderStatusOptions() {
 }
 
 async function loadStatuses(silent) {
-  const st = $('#t-st');
-  if (!silent) setStatus(st, 'Loading...');
+  const st = $('#t-load');
+  if (!silent) setBtn(st, 'Loading...', 'busy');
   try {
     const all = await jira('GET', '/rest/api/3/status');
     const order = { new: 0, indeterminate: 1, done: 2 };
     all.sort((a, b) => (order[a.statusCategory?.key] ?? 3) - (order[b.statusCategory?.key] ?? 3) || a.name.localeCompare(b.name));
     statusList = all.map((s) => s.name);
     renderStatusOptions();
-    setStatus(st, `${statusList.length} statuses loaded`, 'okc');
-  } catch (e) { if (!silent) setStatus(st, e.message, 'err'); }
+    setBtn(st, `${statusList.length} loaded`, 'okc', `${statusList.length} statuses loaded`);
+  } catch (e) { if (!silent) setBtn(st, e.message, 'err'); }
 }
 $('#t-load').onclick = () => loadStatuses(false);
 
@@ -950,9 +960,9 @@ async function loadWindows(keys, onProgress, strict) {
 }
 
 async function refreshWindows() {
-  const st = $('#t-st');
-  await loadWindows(S.issues.map((i) => i.key), (d, n) => setStatus(st, `Updating task history ${d}/${n}...`));
-  setStatus(st, 'Task history updated', 'okc');
+  const st = $('#t-load');
+  await loadWindows(S.issues.map((i) => i.key), (d, n) => setBtn(st, `History ${d}/${n}`, 'busy', 'Updating task history'));
+  setBtn(st, 'History updated', 'okc', 'Task history updated');
   renderTasks();
 }
 
@@ -1197,12 +1207,10 @@ function renderStats() {
 }
 
 // Progress of the calculation, shown both on the Tasks tab and on the Preview tab (Recalculate).
-function calcStatus(text, cls) {
-  setStatus($('#s-calcst'), text, cls);
-  const ps = $('#p-status');
-  if (ps) setStatus(ps, text, cls);
+function calcStatus(text, cls, title) {
+  setBtn($('#s-calc'), text, cls, title);
   const rb = $('#p-recalc');
-  if (rb) rb.disabled = busy || cls === 'busy';
+  if (rb) { setBtn(rb, text, cls, title); rb.disabled = busy || cls === 'busy'; }
 }
 
 $('#s-calc').onclick = async () => {
@@ -1215,12 +1223,12 @@ $('#s-calc').onclick = async () => {
   calcStatus(again ? 'Recalculating...' : 'Calculating...', 'busy');
   let tracked = [];
   try {
-    await ensureWindows((d, n) => calcStatus(`Reading task history ${d}/${n}...`, 'busy'));
+    await ensureWindows((d, n) => calcStatus(`History ${d}/${n}`, 'busy', 'Reading task history'));
     const { from, to } = S.sched;
-    if (useTracked && from && to && from <= to) tracked = await loadTracked((n, total) => calcStatus(`Reading tracked time ${n}/${total}...`, 'busy'));
+    if (useTracked && from && to && from <= to) tracked = await loadTracked((n, total) => calcStatus(`Worklogs ${n}/${total}`, 'busy', 'Reading tracked time'));
     calcStatus(again ? 'Recalculating...' : 'Calculating...', 'busy');
     await new Promise((res) => setTimeout(res));  // let the status paint before the synchronous layout
-  } catch (e) { btn.disabled = false; calcStatus(''); return alert(e.message); }
+  } catch (e) { btn.disabled = false; calcStatus(e.message, 'err'); return; }
   btn.disabled = false;
   const r = layout(tracked);
   calcStatus('');
@@ -1228,7 +1236,7 @@ $('#s-calc').onclick = async () => {
   if (!r.entries.length) return alert(useTracked && tracked.length ? 'Nothing left to distribute: the hours are already tracked or the working days are full.' : 'No tasks with hours. Fill in hours on the Tasks tab.');
   P = { entries: r.entries, warnings: r.warnings, ranges: r.ranges, days: r.days, trackedBy: useTracked ? r.trackedBy : null };
   show('prev');
-  calcStatus(`${again ? 'Recalculated' : 'Calculated'} at ${new Date().toLocaleTimeString()}`, 'okc');
+  calcStatus(again ? 'Recalculated' : 'Calculated', 'okc', `${again ? 'Recalculated' : 'Calculated'} at ${new Date().toLocaleTimeString()}`);
 };
 
 // ---------- 4. preview and submit ----------
@@ -1324,9 +1332,10 @@ function renderPreview() {
   box.innerHTML =
     (P.warnings.length ? `<ul class="warn">${P.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : '') +
     `<div class="stat">Entries: <b>${P.entries.length}</b> · total: <b>${fmtD(total)}</b> · sent: <b>${sent}</b>${tb ? ` · already tracked in Jira: <b>${fmtD(trackedTot)}</b>` : ''}</div>` +
-    `<div class="row"><button class="btn pri" id="p-send" ${busy ? 'disabled' : ''}>Approve and send to Jira</button>` +
-    (busy ? '<button class="btn danger" id="p-stop">Stop</button>' : '') +
-    `<button class="btn" id="p-recalc" ${busy ? 'disabled' : ''}>Recalculate</button><span id="p-status"></span>` +
+    // Approve shows the progress and the result of sending in place of its label; while sending, the same button stops it.
+    `<div class="row" style="align-items:center"><button class="btn sec" id="p-recalc" ${busy ? 'disabled' : ''}>Recalculate</button>` +
+    `<button class="btn pri" id="p-send" title="${esc(busy ? 'Click to stop' : (pSendSt && pSendSt.title) || '')}">${btnHtml('Approve and send to Jira', pSendSt)}</button>` +
+    (busy && !pStop ? '<span class="hint" style="margin:0">Click the button again to stop</span>' : '') +
     `<span class="views"><button data-view="table" class="${pView === 'table' ? 'on' : ''}">Table</button><button data-view="list" class="${pView === 'list' ? 'on' : ''}">List</button></span></div>` +
     (pView === 'table' ? entriesTable(P.entries, P.days, { rmAttr: 'data-rmcell', canRm: !busy }) : `<h3>By task</h3><table>${sumRows}</table>` + days);
   const ns = box.querySelector('.pscroll');
@@ -1346,9 +1355,13 @@ $('#p-box').addEventListener('click', (e) => {
   }
   const vw = e.target.closest('[data-view]');
   if (vw) { pView = vw.dataset.view; renderPreview(); return; }
-  if (e.target.id === 'p-send') send();
-  if (e.target.id === 'p-stop') { pStop = true; setStatus($('#p-status'), 'Stopping after the current request...'); }
-  if (e.target.id === 'p-recalc') $('#s-calc').onclick();
+  if (e.target.closest('#p-send')) {
+    if (!busy) return send();
+    pStop = true;
+    pSendSt = { text: 'Stopping...', cls: 'busy' };
+    renderPreview();
+  }
+  if (e.target.closest('#p-recalc')) $('#s-calc').onclick();
 });
 
 async function send() {
@@ -1359,13 +1372,12 @@ async function send() {
   if (!confirm(`Send ${todo.length} worklogs (${fmtD(sum)}) to Jira?`)) return;
   busy = true;
   pStop = false;
-  renderPreview();
   let ok = 0, fail = 0, i = 0;
   for (const e of todo) {
     if (pStop) break;
     i++;
-    const st = $('#p-status');
-    if (st) setStatus(st, `Sending ${i}/${todo.length}...`, 'busy');
+    pSendSt = { text: `Sending ${i}/${todo.length}...`, cls: 'busy' };
+    renderPreview();
     try {
       await jira('POST', `/rest/api/3/issue/${encodeURIComponent(e.key)}/worklog?adjustEstimate=leave`, { started: jiraStarted(e.date, e.start), timeSpentSeconds: e.min * 60 });
       e.done = true; e.err = ''; ok++;
@@ -1378,8 +1390,11 @@ async function send() {
   }
   busy = false;
   if (ok) trackedCache = null;
+  // A short result in the button, the details in its tooltip; back to the label after a while.
+  const res = pSendSt = { text: `Sent ${ok}/${todo.length}${fail ? `, failed ${fail}` : ''}`, cls: fail ? 'err' : 'okc',
+    title: `${pStop ? 'Stopped. ' : ''}Sent: ${ok}, failed: ${fail}${ok + fail < todo.length || fail ? ' — click "Approve" again to send the remaining/failed ones' : ''}` };
   renderPreview();
-  setStatus($('#p-status'), `${pStop ? 'Stopped. ' : ''}Sent: ${ok}, failed: ${fail}${ok + fail < todo.length || fail ? ' — click "Approve" again to send the remaining/failed ones' : ''}`, fail ? 'err' : 'okc');
+  setTimeout(() => { if (pSendSt === res) { pSendSt = null; renderPreview(); } }, 4000);
 }
 
 $('#quit').onclick = async () => {
@@ -1391,12 +1406,9 @@ $('#quit').onclick = async () => {
 // ---------- 4. review ----------
 let xView = 'table';
 
-// Search progress or error, kept here so the search goes on (and shows) after switching tabs: { text, cls } or null.
-let xSearch = null;
-
 function renderClear() {
   const box = $('#x-box');
-  if (!found) { box.innerHTML = xSearch ? `<p class="${xSearch.cls}">${esc(xSearch.text)}</p>` : ''; return; }
+  if (!found) { box.innerHTML = ''; return; }
   const oldScroll = box.querySelector('.pscroll');
   const sx = oldScroll ? oldScroll.scrollLeft : 0, sy = oldScroll ? oldScroll.scrollTop : 0;
   const total = found.items.reduce((a, w) => a + w.min, 0);
@@ -1410,7 +1422,7 @@ function renderClear() {
       // Delete all found shows the progress and the result of deleting/restoring in place of its label;
       // while it runs, the same button stops it.
       `<button class="btn danger" id="x-del" title="${esc(xBusy ? 'Click to stop' : (xst && xst.title) || '')}"${!xBusy && deleted === found.items.length ? ' disabled' : ''}>` +
-      (xst ? `<span class="${xst.cls === 'busy' ? 'busy' : ''}">${esc(xst.text)}</span>` : 'Delete all found') + '</button>' +
+      btnHtml('Delete all found', xst) + '</button>' +
       (xBusy && !xStop ? '<span class="hint" style="margin:0">Click the button again to stop</span>' : '') +
       `<span class="views"><button data-xview="table" class="${xView === 'table' ? 'on' : ''}">Table</button><button data-xview="list" class="${xView === 'list' ? 'on' : ''}">List</button></span></div>` : '') +
     (!found.items.length ? '' : xView === 'table' ? clearTable() :
@@ -1431,17 +1443,20 @@ $('#x-find').onclick = async () => {
   if (xBusy) return;
   const { from, to } = S.clear;
   if (!from || !to || from > to) return alert('Invalid period');
+  const btn = $('#x-find');
   xBusy = true;
   found = null;
-  xSearch = { text: 'Searching...', cls: 'hint busy' };
+  btn.disabled = true;
+  setBtn(btn, 'Searching...', 'busy');
   renderClear();
   try {
-    const items = await findMyWorklogs(from, to, (n, total, key) => { xSearch.text = `Issue ${n}/${total}: ${key}`; renderClear(); });
+    const items = await findMyWorklogs(from, to, (n, total, key) => setBtn(btn, `Issue ${n}/${total}`, 'busy', `Reading worklogs of ${key}`));
     found = { items, from, to };
-    xSearch = null;
+    setBtn(btn, '');
   } catch (e) {
-    xSearch = { text: e.message, cls: 'err' };
+    setBtn(btn, e.message, 'err');
   }
+  btn.disabled = false;
   xBusy = false;
   renderClear();
 };

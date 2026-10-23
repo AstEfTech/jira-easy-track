@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(403, 'forbidden')
         route = self.path.split('?')[0]
         if route == '/':
-            return self.reply(200, HTML.replace('__TOKEN__', TOKEN), 'text/html; charset=utf-8')
+            return self.reply(200, PAGE, 'text/html; charset=utf-8')
         if route == '/api/config' and self.headers.get('X-Track-Token') == TOKEN:
             try:
                 with open(CONFIG_PATH, encoding='utf-8') as f:
@@ -443,8 +443,12 @@ const CFG_KEYS = ['conn', 'jql', 'jqlTracked', 'fields', 'pinned', 'track'];
 const WORKDAY_KEYS = ['dayStart', 'dayEnd', 'breakStart', 'breakEnd', 'step', 'days', 'varied', 'useTracked'];
 let cfgOn = false;
 let cfgTimer = null;
+// S holds the loaded issues, so it is written to localStorage once the input settles (and when the page is left).
+let lsTimer = null;
+const flushLS = () => { clearTimeout(lsTimer); localStorage.setItem(LS, JSON.stringify(S)); };
+addEventListener('pagehide', flushLS);
 const save = () => {
-  localStorage.setItem(LS, JSON.stringify(S));
+  clearTimeout(lsTimer); lsTimer = setTimeout(flushLS, 300);
   if (cfgOn) { clearTimeout(cfgTimer); cfgTimer = setTimeout(saveConfig, 500); }
 };
 const cfgStatus = (text, cls, title) => setBtn($('#c-savecfg'), text, cls, title);
@@ -550,27 +554,42 @@ async function searchIssues(jql, fields) {
   return out;
 }
 
+let meCache = null;  // { conn: 'base|email', accountId }
+async function myAccountId() {
+  const c = S.conn.base + '|' + S.conn.email;
+  if (meCache?.conn !== c) meCache = { conn: c, accountId: (await jira('GET', '/rest/api/3/myself')).accountId };
+  return meCache.accountId;
+}
+
 // Own worklogs started within from..to (inclusive, local dates); start is minutes from midnight.
 async function findMyWorklogs(from, to, onProgress) {
-  const me = await jira('GET', '/rest/api/3/myself');
-  const issues = await searchIssues(`worklogAuthor = currentUser() AND worklogDate >= "${addDays(from, -1)}" AND worklogDate <= "${addDays(to, 1)}"`, ['summary']);
-  const items = [];
+  const [accountId, issues] = await Promise.all([myAccountId(),
+    searchIssues(`worklogAuthor = currentUser() AND worklogDate >= "${addDays(from, -1)}" AND worklogDate <= "${addDays(to, 1)}"`, ['summary'])]);
+  // Only worklogs started around the period are requested (a day of margin for time zones), then filtered by local date.
+  const after = pYmd(addDays(from, -1)).getTime(), before = pYmd(addDays(to, 2)).getTime();
+  const items = [], todo = [...issues];
   let n = 0;
-  for (const is of issues) {
-    if (onProgress) onProgress(++n, issues.length, is.key);
-    for (let start = 0; ;) {
-      const r = await jira('GET', `/rest/api/3/issue/${encodeURIComponent(is.key)}/worklog?startAt=${start}&maxResults=1000`);
-      for (const w of r.worklogs) {
-        if (w.author?.accountId !== me.accountId) continue;
-        const dt = parseJiraDate(w.started);
-        const date = ymd(dt);
-        if (date >= from && date <= to) items.push({ id: w.id, key: is.key, date, start: dt.getHours() * 60 + dt.getMinutes(), min: Math.round(w.timeSpentSeconds / 60), summary: val(is.fields.summary), started: w.started, sec: w.timeSpentSeconds, comment: w.comment });
-      }
-      start += r.worklogs.length;
-      if (!r.worklogs.length || start >= r.total) break;
+  const worker = async () => {
+    while (todo.length) {
+      const is = todo.shift();
+      if (onProgress) onProgress(++n, issues.length, is.key);
+      try {
+        for (let start = 0; ;) {
+          const r = await jira('GET', `/rest/api/3/issue/${encodeURIComponent(is.key)}/worklog?startAt=${start}&maxResults=1000&startedAfter=${after}&startedBefore=${before}`);
+          for (const w of r.worklogs) {
+            if (w.author?.accountId !== accountId) continue;
+            const dt = parseJiraDate(w.started);
+            const date = ymd(dt);
+            if (date >= from && date <= to) items.push({ id: w.id, key: is.key, date, start: dt.getHours() * 60 + dt.getMinutes(), min: Math.round(w.timeSpentSeconds / 60), summary: val(is.fields.summary), started: w.started, sec: w.timeSpentSeconds, comment: w.comment });
+          }
+          start += r.worklogs.length;
+          if (!r.worklogs.length || start >= r.total) break;
+        }
+      } catch (e) { todo.length = 0; throw e; }  // stop the other workers too
     }
-  }
-  items.sort((a, b) => a.date.localeCompare(b.date) || a.key.localeCompare(b.key));
+  };
+  await Promise.all(Array.from({ length: Math.min(5, issues.length) }, worker));
+  items.sort((a, b) => a.date.localeCompare(b.date) || a.key.localeCompare(b.key) || a.start - b.start);
   return items;
 }
 
@@ -590,8 +609,9 @@ async function loadIssues(onProgress) {
   if (S.jqlTracked && S.sched.from && S.sched.to && S.sched.from <= S.sched.to) {
     const seen = new Set(list.map((i) => i.key));
     const tracked = await searchIssues(`worklogAuthor = currentUser() AND worklogDate >= "${S.sched.from}" AND worklogDate <= "${S.sched.to}" ORDER BY updated DESC`, ids);
+    const tk = new Set(tracked.map((i) => i.key));
     tracked.forEach((i) => { i.wl = true; });
-    list.forEach((i) => { if (tracked.some((t) => t.key === i.key)) i.wl = true; });
+    list.forEach((i) => { if (tk.has(i.key)) i.wl = true; });
     list = list.concat(tracked.filter((i) => !seen.has(i.key)));
   }
   const have = new Set(list.map((i) => i.key));
@@ -621,7 +641,13 @@ function val(v) {
 
 let pinnedOnly = true;
 const viewIssues = () => S.issues.filter((i) => (pinnedOnly ? S.pinned.includes(i.key) : (S.jqlTracked && i.wl) || inTrackWindow(i.key)));
-const estMin = (key) => Math.round((S.issues.find((i) => i.key === key)?.fields?.timeoriginalestimate || 0) / 60);
+// Issues by key, rebuilt whenever S.issues is replaced (it is never changed in place).
+let issueIdx = null, issueIdxSrc = null;
+const issueOf = (key) => {
+  if (issueIdxSrc !== S.issues) { issueIdxSrc = S.issues; issueIdx = new Map(S.issues.map((i) => [i.key, i])); }
+  return issueIdx.get(key);
+};
+const estMin = (key) => Math.round((issueOf(key)?.fields?.timeoriginalestimate || 0) / 60);
 const fmtH = (m) => (m % 60 ? `${Math.floor(m / 60)}:${pad(m % 60)}` : String(m / 60));
 // Plan with To track (total) defaulted to the original estimate for the tasks in view when the user has not entered one.
 function planOf() {
@@ -631,7 +657,7 @@ function planOf() {
   return out;
 }
 
-const sumOf = (key) => val(S.issues.find((i) => i.key === key)?.fields?.summary);
+const sumOf = (key) => val(issueOf(key)?.fields?.summary);
 const link = (key) => `<a href="${esc(baseUrl())}/browse/${esc(key)}" target="_blank" rel="noopener">${esc(key)}</a>`;
 const setStatus = (el, text, cls) => { el.className = cls || ''; el.textContent = text; };
 
@@ -667,8 +693,8 @@ document.addEventListener('input', (e) => {
   if (!el.dataset || !el.dataset.b) return;
   setPath(el.dataset.b, el.value);
   save();
-  if (el.dataset.b.startsWith('sched') || el.dataset.b.startsWith('track.') || el.dataset.b === 'jql') renderStats();
-  if (el.dataset.b.startsWith('sched.')) renderTasks();
+  if (el.dataset.b.startsWith('sched.')) renderTasks();  // includes renderStats
+  else if (el.dataset.b.startsWith('track.') || el.dataset.b === 'jql') renderStats();
   if (el.dataset.b.startsWith('track.') && S.conn.token && S.issues.length) refreshWindows();
 });
 
@@ -762,9 +788,9 @@ function twText(key) {
   let avail = '';
   if (g) {
     const wdays = workDays().filter((d) => d >= start && (!end || d <= end));
-    const inWin = new Set(wdays);
     const ready = trackedFresh() && !trackedCache.err;
-    const done = ready ? trackedCache.items.reduce((a, w) => a + (inWin.has(w.date) ? w.min : 0), 0) : 0;
+    const byDate = trackedSums().byDate;
+    const done = ready ? wdays.reduce((a, d) => a + (byDate[d] || 0), 0) : 0;
     const loading = S.conn.token && periodOk() && !trackedFresh();
     avail = ` (${loading ? '...' : fmtD(Math.max(0, wdays.length * g.len - done))} available)`;
   }
@@ -812,7 +838,6 @@ $('#k-clear').onclick = () => {
   trackedCache = null;
   save();
   renderTasks();
-  renderStats();
   setBtn($('#s-calc'), '');
 };
 
@@ -853,7 +878,6 @@ $('#t-on').onchange = (e) => {
   S.track.on = e.target.checked;
   save();
   renderTasks();
-  renderStats();
   if (S.track.on && S.conn.token && S.issues.length) refreshWindows();
 };
 $('#k-addbtn').onclick = async () => {
@@ -1122,6 +1146,18 @@ function layout(tracked = []) {
 let trackedCache = null;  // own worklogs of the period: { from, to, items, err }
 let trackedTimer = null, trackedPending = '';
 const trackedFresh = () => trackedCache && trackedCache.from === S.sched.from && trackedCache.to === S.sched.to;
+// Minutes of trackedCache by task and by date, recomputed only when trackedCache is replaced.
+let tSumsSrc, tSums;
+function trackedSums() {
+  if (tSumsSrc === trackedCache) return tSums;
+  tSumsSrc = trackedCache;
+  tSums = { byKey: {}, byDate: {} };
+  (trackedCache?.items || []).forEach((w) => {
+    tSums.byKey[w.key] = (tSums.byKey[w.key] || 0) + w.min;
+    tSums.byDate[w.date] = (tSums.byDate[w.date] || 0) + w.min;
+  });
+  return tSums;
+}
 
 async function loadTracked(onProgress) {
   const { from, to } = S.sched;
@@ -1147,7 +1183,7 @@ function trackedText(key) {
   if (!S.conn.token || !periodOk()) return '';
   if (!trackedFresh()) return '...';
   if (trackedCache.err) return '?';
-  const m = trackedCache.items.reduce((a, w) => a + (w.key === key ? w.min : 0), 0);
+  const m = trackedSums().byKey[key] || 0;
   return m ? fmtD(m) : '';
 }
 const updateTrackedCells = () => {
@@ -1254,7 +1290,7 @@ let pView = 'table';
 function taskOrder(keys) {
   const date = (k) => {
     if (winValid(k) && S.windows[k].start) return S.windows[k].start;
-    const c = S.issues.find((i) => i.key === k)?.fields?.created;
+    const c = issueOf(k)?.fields?.created;
     return c ? ymd(parseJiraDate(c)) : '9999-99-99';
   };
   return keys.map((k) => [k, date(k)])
@@ -1384,8 +1420,6 @@ async function send() {
     } catch (x) {
       e.err = x.message; fail++;
       if (x.status === 401 || x.status === 0) break;
-    } finally {
-      renderPreview();
     }
   }
   busy = false;
@@ -1545,7 +1579,7 @@ function deleteAllFound() {
   await loadConfig();
   fillConn();
   renderStatusOptions();
-  localStorage.setItem(LS, JSON.stringify(S));
+  flushLS();
   show(cfgOn ? 'tasks' : 'conn');
   if (cfgOn && S.conn.token && S.pinned.length) reload();
 })();
@@ -1553,6 +1587,7 @@ function deleteAllFound() {
 </body>
 </html>
 '''
+PAGE = HTML.replace('__TOKEN__', TOKEN).encode('utf-8')
 
 if __name__ == '__main__':
     main()

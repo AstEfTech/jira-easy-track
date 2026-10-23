@@ -12,9 +12,10 @@ You tell it how many hours you spent on each task, and it spreads them across yo
 1. **Setup**: enter your Jira Cloud URL, email and [API token](https://id.atlassian.com/manage-profile/security/api-tokens) and press **Test and save**. Here you also set the working day (start/end, an optional break, step of 5-60 minutes) and the working weekdays, and can save everything to a config file.
 2. **Tasks**:
    - **Period**: dates "From" and "To", plus optional days off / holidays and extra working days (`YYYY-MM-DD`, comma-separated).
-   - **Task source**: an editable JQL (default: assigned to you), the fields to display (Key and Summary by default) and adding a task by key. Press **Load tasks** to fetch them.
+   - **Task source**: an editable JQL (default: assigned to you), a checkbox to also add the tasks you tracked time on in the period (they are listed even outside the tracking window filter), the fields to display (Key and Summary by default) and adding a task by key. Press **Load tasks** to fetch them.
    - For each task set:
-     - **Total** hours, spread over the working days of the period (if left empty, the task's original estimate from Jira is used; type `0` to track nothing), and/or
+     - **Tracked**: your time already tracked on the task in the period (read-only).
+     - **To track** hours, spread over the working days of the period (if left empty, the task's original estimate from Jira is used; type `0` to track nothing), and/or
      - **Per day** hours, logged on every working day (e.g. a daily 1h meeting).
      - **Timing**: even, towards the start / middle / end, or random.
      - **Range**: **Task window** (only the days inside the task's tracking window) or **Whole period**.
@@ -26,9 +27,14 @@ You tell it how many hours you spent on each task, and it spreads them across yo
    Then press **Calculate distribution**. 
    Collapsible sections on this page:
    - **Task tracking window**: a task is tracked only between its first move into status 1 (default `In Progress`) and its first move into status 2 (default `Done`), inside the selected period. Both statuses are picked from your Jira's status list (**Load statuses**). A checkbox (on by default) lists only tasks whose window overlaps the selected period (applies when **only pinned** is off). When tasks are loaded, their status history is read and **Range** is preset: Task window if the task has such a transition, Whole period otherwise. You can change it per task.
-   - **Distribution options**: optionally enable a realistic spread so different days get different hours.
+   - **Distribution options**: optionally enable a realistic spread so different days get different hours, and/or **account for already tracked time**: your worklogs already in Jira for the period keep their time slots free, so new worklogs do not overlap them, and a task's Per day is reduced by what is already tracked on it that day. To track is always added in full.
 3. **Preview**: review the generated distribution as a table (tasks by days) or a list (by days), remove entries or whole cells you don't want, then approve to push the worklogs to Jira. A Stop button interrupts sending at any time; failed or remaining entries can be sent in the next run.
-4. **Clear**: find and delete your own worklogs for a period (with a Stop button as well).
+4. **Review**: find your own worklogs for a period (**Find my worklogs**) as a table (tasks by days, default) or a list, and delete what you don't need:
+   - click a table cell, or the × next to a worklog in the list, to delete it right away; click it again (↺ in the list) to restore it with the same start, duration and comment;
+   - click a day in the Total row to delete all worklogs of that day (asks first);
+   - **Delete all found**, next to the search button, deletes everything found (asks first). The Stop button of this tab interrupts deleting or restoring.
+
+   The Review period is set to the Tasks period on every start, then it is changed independently.
 
 ## Quick start
 
@@ -42,7 +48,7 @@ The browser opens at `http://127.0.0.1:4777` (set `JIRA_TRACK_PORT` to change it
 
 ## Config file (optional)
 
-The **Save to config file** button stores the connection, JQL, displayed fields, pinned tasks (with their per day hours), working day settings (including the realistic spread option) and the tracking window statuses in `jira-track.config.json` next to the script. Once saved, it is loaded on every start and kept up to date automatically. Set `JIRA_TRACK_CONFIG` to use a different path.
+The **Save to config file** button stores the connection, JQL, displayed fields, pinned tasks (with their per day hours), working day settings (including the distribution options) and the tracking window statuses in `jira-track.config.json` next to the script. Once saved, it is loaded on every start and kept up to date automatically. Set `JIRA_TRACK_CONFIG` to use a different path.
 
 The token is stored in plain text, so the config file is excluded via `.gitignore`. Do not commit or share it.
 

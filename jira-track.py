@@ -152,7 +152,7 @@ body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui
 header { display:flex; gap:24px; align-items:center; padding:10px 24px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:2; }
 h1 { font-size:17px; margin:0; }
 nav { display:flex; gap:4px; flex-wrap:wrap; }
-nav button { background:none; border:0; padding:7px 14px; border-radius:6px; color:var(--mut); cursor:pointer; font:inherit; }
+nav button { background:none; border:0; padding:0 14px; height:34px; line-height:34px; border-radius:6px; color:var(--mut); cursor:pointer; font:inherit; }
 nav button.on { background:var(--acc); color:#fff; }
 main { max-width:1200px; margin:20px auto; padding:0 24px; }
 .tab { display:none; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; }
@@ -168,7 +168,7 @@ input.bad { border-color:var(--bad); }
 .row label { margin:0; }
 .grow { flex:1; min-width:240px; } .grow input { width:100%; }
 .wide { width:100%; max-width:480px; }
-button.btn { font:inherit; padding:7px 14px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+button.btn { font:inherit; padding:0 14px; height:34px; line-height:32px; vertical-align:middle; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
 button.pri { background:var(--acc); border-color:var(--acc); color:#fff; }
 button.danger { background:var(--bad); border-color:var(--bad); color:#fff; }
 button:disabled { opacity:.5; cursor:default; }
@@ -176,6 +176,8 @@ button:disabled { opacity:.5; cursor:default; }
 .err { color:var(--bad); } .okc { color:var(--ok); }
 .busy::before { content:''; display:inline-block; width:12px; height:12px; margin-right:6px; vertical-align:-2px; border:2px solid var(--line); border-top-color:var(--acc); border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+#x-del { width:17em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#x-del .busy::before { border-color:rgba(255,255,255,.35); border-top-color:#fff; }
 table { border-collapse:collapse; width:100%; }
 th, td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
 th { color:var(--mut); font-weight:500; font-size:12px; }
@@ -191,6 +193,9 @@ td.num, th.num { text-align:right; white-space:nowrap; }
 .days label { display:flex; gap:5px; align-items:center; margin:0; color:var(--fg); font-size:13px; }
 .warn { color:#b45309; margin:6px 0; padding-left:18px; }
 .stat { background:var(--bg); border-radius:8px; padding:10px 14px; margin:12px 0; }
+details.stat > summary { cursor:pointer; }
+.stat .how { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12px; line-height:1.7; }
+.stat .how b { color:var(--fg); font-weight:600; }
 .seg { border:1px solid var(--line); border-radius:8px; padding:12px 16px 4px; margin-bottom:14px; }
 .seg > h3 { margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
 details.fold > summary { cursor:pointer; user-select:none; color:var(--mut); font-size:12px; margin-bottom:8px; }
@@ -208,7 +213,7 @@ td input.sug { font-style:italic; color:var(--mut); }
 a { color:var(--acc); text-decoration:none; }
 progress { width:200px; vertical-align:middle; }
 .views { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; margin-left:auto; }
-.views button { border:0; background:var(--card); color:var(--mut); padding:7px 14px; cursor:pointer; font:inherit; }
+.views button { border:0; background:var(--card); color:var(--mut); padding:0 14px; height:32px; line-height:32px; cursor:pointer; font:inherit; }
 .views button.on { background:var(--acc); color:#fff; }
 .ptable { width:auto; min-width:100%; }
 .ptable th.c, .ptable td.c { text-align:center; white-space:nowrap; padding:4px 8px; border-left:1px solid var(--line); }
@@ -349,7 +354,7 @@ header .quit { margin-left:auto; }
     <div id="k-status"></div>
     <div style="overflow:auto;margin-bottom:12px"><table id="k-table"></table></div>
   </div>
-  <div class="stat" id="s-stat"></div>
+  <details class="stat" id="s-stat"><summary id="s-stat-sum"></summary><ul class="how" id="s-stat-how"></ul></details>
   <div class="row split">
     <div><button class="btn pri" id="s-calc">Calculate distribution</button> <span id="s-calcst"></span></div>
     <button class="btn" id="k-clear" title="Remove loaded tasks, hours and cached task history">Clear data</button>
@@ -368,7 +373,6 @@ header .quit { margin-left:auto; }
     <label>From<input type="date" data-b="clear.from"></label>
     <label>To<input type="date" data-b="clear.to"></label>
     <button class="btn pri" id="x-find">Find my worklogs</button>
-    <button class="btn danger" id="x-del" disabled>Delete all found</button>
   </div>
   <div id="x-box"></div>
 </section>
@@ -718,7 +722,7 @@ function renderTasks() {
       `<td class="num"><input data-k="${esc(i.key)}" data-f="fixed" value="${esc(p.fixed || '')}" placeholder="0"></td>` +
       `<td><select data-k="${esc(i.key)}" data-f="shift">${SHIFTS.map(([v, l]) => `<option value="${v}"${(p.shift || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
       `<td><select data-k="${esc(i.key)}" data-f="range">${RANGES.map(([v, l]) => `<option value="${v}"${effRange(i.key) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
-      `<td class="tw" style="white-space:nowrap">${esc(twText(i.key))}</td>` +
+      `<td class="tw" data-tw="${esc(i.key)}" style="white-space:nowrap">${esc(twText(i.key))}</td>` +
       `<td><input type="checkbox" style="width:auto" data-pin="${esc(i.key)}"${S.pinned.includes(i.key) ? ' checked' : ''}></td></tr>`;
   }).join('');
   $('#k-table').innerHTML = head + rows;
@@ -732,7 +736,18 @@ function twText(key) {
   if (effRange(key) !== 'window' || !winValid(key)) return '';
   const { start, end } = S.windows[key];
   if (!start) return '';
-  return end === start ? start : `${start} – ${end || 'now'}`;
+  // Time the schedule allows inside the window (working days of the Period) minus your worklogs on those days (all tasks).
+  const g = dayGeometry();
+  let avail = '';
+  if (g) {
+    const wdays = workDays().filter((d) => d >= start && (!end || d <= end));
+    const inWin = new Set(wdays);
+    const ready = trackedFresh() && !trackedCache.err;
+    const done = ready ? trackedCache.items.reduce((a, w) => a + (inWin.has(w.date) ? w.min : 0), 0) : 0;
+    const loading = S.conn.token && periodOk() && !trackedFresh();
+    avail = ` (${loading ? '...' : fmtD(Math.max(0, wdays.length * g.len - done))} available)`;
+  }
+  return (end === start ? start : `${start} – ${end || 'now'}`) + avail;
 }
 
 const tasksCount = (visible) => `Tasks: ${visible.length}${visible.length < S.issues.length ? ' of ' + S.issues.length : ''}`;
@@ -793,7 +808,6 @@ $('#k-clear').onclick = () => {
 
 async function reload() {
   const st = $('#k-status'), ls = $('#k-loadst'), btn = $('#k-load');
-  setStatus(st, 'Loading...');
   setStatus(ls, 'Loading tasks...', 'busy');
   btn.disabled = true;
   try {
@@ -1126,10 +1140,13 @@ function trackedText(key) {
   const m = trackedCache.items.reduce((a, w) => a + (w.key === key ? w.min : 0), 0);
   return m ? fmtD(m) : '';
 }
-const updateTrackedCells = () => document.querySelectorAll('#k-table [data-trk]').forEach((td) => {
-  td.textContent = trackedText(td.dataset.trk);
-  td.title = trackedFresh() && trackedCache.err ? trackedCache.err : '';
-});
+const updateTrackedCells = () => {
+  document.querySelectorAll('#k-table [data-trk]').forEach((td) => {
+    td.textContent = trackedText(td.dataset.trk);
+    td.title = trackedFresh() && trackedCache.err ? trackedCache.err : '';
+  });
+  document.querySelectorAll('#k-table [data-tw]').forEach((td) => { td.textContent = twText(td.dataset.tw); });
+};
 
 function renderStats() {
   const s = S.sched;
@@ -1140,10 +1157,10 @@ function renderStats() {
   $('#s-ts-sum').textContent = $('#s-ts-sum').title = S.jql + (S.jqlTracked ? ' + tasks with my worklogs' : '');
   $('#k-jqltr').checked = !!S.jqlTracked;
   $('#s-do-sum').textContent = [s.varied && 'Realistic spread', s.useTracked && 'Account for tracked time'].filter(Boolean).join(' · ');
-  const el = $('#s-stat');
+  const el = $('#s-stat-sum'), how = $('#s-stat-how');
   const g = dayGeometry();
   const days = workDays();
-  if (!g || !days.length) { el.textContent = 'Check the period and working day times'; return; }
+  if (!g || !days.length) { el.textContent = 'Check the period and working day times'; how.innerHTML = ''; return; }
   // With the option on, "already tracked" always keeps its place: "..." while loading, "error" on failure.
   let tracked = [], trackedCell = '';
   if (s.useTracked) {
@@ -1152,9 +1169,12 @@ function renderStats() {
     else if (trackedCache.err) trackedCell = `<span class="err" title="${esc(trackedCache.err)}">error</span>`;
     else tracked = trackedCache.items;
   }
-  // planned: what the user entered for the tasks shown in the list, Per day only on the days of the task's Range.
+  // planned: what the user entered for the tasks shown in the list; the tasks' Tracking windows are not applied here.
   const listed = new Set(listedIssues().map((i) => i.key));
-  const planned = planTasks(days, [], []).tasks.reduce((a, t) => a + (listed.has(t.key) && t.ok.some(Boolean) ? t.total + t.fixed * t.ok.filter(Boolean).length : 0), 0);
+  const plan = Object.entries(planOf()).filter(([k]) => listed.has(k)).map(([, p]) => p);
+  const toTrack = plan.reduce((a, p) => a + (parseH(p.total) || 0), 0);
+  const perDay = plan.reduce((a, p) => a + (parseH(p.fixed) || 0), 0);
+  const planned = toTrack + perDay * days.length;
   const work = days.length * g.len;
   const trackedTot = tracked.reduce((a, w) => a + w.min, 0);
   const available = Math.max(0, work - trackedTot);
@@ -1162,6 +1182,18 @@ function renderStats() {
   el.innerHTML = `Working days: <b>${days.length}</b> · per day: <b>${fmtD(g.len)}</b> · total working time: <b>${fmtD(work)}</b>` +
     (s.useTracked ? ` · already tracked: <b>${trackedCell || fmtD(trackedTot)}</b>` : '') +
     ` · available: <b>${pending ? '...' : fmtD(available)}</b> · planned: <b class="${!pending && planned > available ? 'err' : ''}">${fmtD(planned)}</b>`;
+  const wdNames = [1, 2, 3, 4, 5, 6, 0].filter((d) => s.days.includes(d)).map((d) => WD[d]).join(', ') || 'none';
+  const dayLen = g.de - g.ds;
+  how.innerHTML = [
+    `<b>Working days</b> = ${days.length}: ${esc(wdNames)} from ${esc(s.from)} to ${esc(s.to)}, minus days off, plus extra working days`,
+    `<b>per day</b> = ${fmtT(g.de)} − ${fmtT(g.ds)} (${fmtD(dayLen)})` + (g.hasBreak ? ` − break ${fmtT(g.bs)}–${fmtT(g.be)} (${fmtD(g.be - g.bs)})` : '') + ` = ${fmtD(g.len)}`,
+    `<b>total working time</b> = ${days.length} working days × ${fmtD(g.len)} per day = ${fmtD(work)}`,
+    s.useTracked ? `<b>already tracked</b> = your worklogs on all tasks from ${esc(s.from)} to ${esc(s.to)} = ${pending ? '...' : fmtD(trackedTot)}` : '',
+    s.useTracked ? `<b>available</b> = ${fmtD(work)} total working time − ${pending ? '...' : fmtD(trackedTot)} already tracked = ${pending ? '...' : fmtD(available)}`
+      : `<b>available</b> = total working time = ${fmtD(available)} (already tracked time is not subtracted: "Account for already tracked time" is off)`,
+    `<b>planned</b> = ${fmtD(toTrack)} To track + ${fmtD(perDay)} Per day × ${days.length} working days = ${fmtD(planned)} (tasks shown in the list); shown in red when it exceeds available`,
+    'The Tracking window of each task is not taken into account in these numbers.',
+  ].filter(Boolean).map((x) => `<li>${x}</li>`).join('');
 }
 
 // Progress of the calculation, shown both on the Tasks tab and on the Preview tab (Recalculate).
@@ -1359,20 +1391,27 @@ $('#quit').onclick = async () => {
 // ---------- 4. review ----------
 let xView = 'table';
 
+// Search progress or error, kept here so the search goes on (and shows) after switching tabs: { text, cls } or null.
+let xSearch = null;
+
 function renderClear() {
   const box = $('#x-box');
-  $('#x-del').disabled = !found || xBusy || found.items.every((w) => w.deleted);
-  if (!found) { box.innerHTML = ''; return; }
+  if (!found) { box.innerHTML = xSearch ? `<p class="${xSearch.cls}">${esc(xSearch.text)}</p>` : ''; return; }
   const oldScroll = box.querySelector('.pscroll');
   const sx = oldScroll ? oldScroll.scrollLeft : 0, sy = oldScroll ? oldScroll.scrollTop : 0;
   const total = found.items.reduce((a, w) => a + w.min, 0);
   const deleted = found.items.filter((w) => w.deleted).length;
+  const xst = found.status;
   const rows = found.items.map((w) => `<tr class="${w.deleted ? 'done' : ''}"><td>${w.date}</td><td>${fmtT(w.start)}–${fmtT(w.start + w.min)}</td><td>${link(w.key)}</td><td>${esc(w.summary)}</td><td class="num">${fmtD(w.min)}</td>` +
     `<td class="num">${w.err ? `<span class="err" title="${esc(w.err)}">error: ${esc(w.err)}</span> ` : ''}${w.deleted ? '<span class="err">deleted</span> ' : ''}` +
     `<button class="btn" data-xdel="${esc(w.id)}" title="${w.deleted ? 'restore' : 'delete'} this worklog" ${xBusy ? 'disabled' : ''}>${w.deleted ? '↺' : '×'}</button></td></tr>`).join('');
-  const st = found.status || { text: '', cls: '' };
   box.innerHTML = `<div class="stat">Found: <b>${found.items.length}</b> · total: <b>${fmtD(total)}</b> · deleted: <b>${deleted}</b></div>` +
-    (found.items.length ? `<div class="row">${xBusy ? '<button class="btn" id="x-stop">Stop</button>' : ''}<span id="x-status" class="${st.cls}">${esc(st.text)}</span>` +
+    (found.items.length ? '<div class="row" style="align-items:center">' +
+      // Delete all found shows the progress and the result of deleting/restoring in place of its label;
+      // while it runs, the same button stops it.
+      `<button class="btn danger" id="x-del" title="${esc(xBusy ? 'Click to stop' : (xst && xst.title) || '')}"${!xBusy && deleted === found.items.length ? ' disabled' : ''}>` +
+      (xst ? `<span class="${xst.cls === 'busy' ? 'busy' : ''}">${esc(xst.text)}</span>` : 'Delete all found') + '</button>' +
+      (xBusy && !xStop ? '<span class="hint" style="margin:0">Click the button again to stop</span>' : '') +
       `<span class="views"><button data-xview="table" class="${xView === 'table' ? 'on' : ''}">Table</button><button data-xview="list" class="${xView === 'list' ? 'on' : ''}">List</button></span></div>` : '') +
     (!found.items.length ? '' : xView === 'table' ? clearTable() :
       `<table class="ctable"><colgroup><col style="width:110px"><col style="width:110px"><col style="width:130px"><col><col style="width:90px"><col style="width:200px"></colgroup>${rows}</table>`);
@@ -1394,15 +1433,14 @@ $('#x-find').onclick = async () => {
   if (!from || !to || from > to) return alert('Invalid period');
   xBusy = true;
   found = null;
-  $('#x-del').disabled = true;
-  $('#x-box').innerHTML = '<p class="hint busy" id="x-status">Searching...</p>';
+  xSearch = { text: 'Searching...', cls: 'hint busy' };
+  renderClear();
   try {
-    const items = await findMyWorklogs(from, to, (n, total, key) => { $('#x-status').textContent = `Issue ${n}/${total}: ${key}`; });
+    const items = await findMyWorklogs(from, to, (n, total, key) => { xSearch.text = `Issue ${n}/${total}: ${key}`; renderClear(); });
     found = { items, from, to };
+    xSearch = null;
   } catch (e) {
-    $('#x-box').innerHTML = `<p class="err">${esc(e.message)}</p>`;
-    xBusy = false;
-    return;
+    xSearch = { text: e.message, cls: 'err' };
   }
   xBusy = false;
   renderClear();
@@ -1417,7 +1455,7 @@ async function runWorklogs(todo, restore) {
   let ok = 0, fail = 0, lastErr = '';
   for (const w of todo) {
     if (xStop) break;
-    found.status = { text: `${restore ? 'Restoring' : 'Deleting'} ${ok + fail + 1}/${n}...`, cls: 'busy' };
+    if (!xStop) found.status = { text: `${restore ? 'Restoring' : 'Deleting'} ${ok + fail + 1}/${n}...`, cls: 'busy' };
     renderClear();
     try {
       if (restore) {
@@ -1439,12 +1477,14 @@ async function runWorklogs(todo, restore) {
   }
   xBusy = false;
   if (ok) trackedCache = null;
-  found.status = { text: `${xStop ? 'Stopped. ' : ''}${restore ? 'Restored' : 'Deleted'}: ${ok}, failed: ${fail}${lastErr ? ' (' + lastErr + ')' : ''}`, cls: fail ? 'err' : 'okc' };
+  // A short result for the button (the full error is in its tooltip and in the failed rows), back to the label after a while.
+  const res = found.status = { text: `${restore ? 'Restored' : 'Deleted'} ${ok}/${n}${fail ? `, failed ${fail}` : ''}`, cls: fail ? 'err' : 'okc', title: (xStop ? 'Stopped. ' : '') + lastErr };
+  setTimeout(() => { if (found && found.status === res) { found.status = null; renderClear(); } }, 4000);
   renderClear();
 }
 
 $('#x-box').addEventListener('click', async (e) => {
-  if (e.target.id === 'x-stop') { xStop = true; if (found) found.status = { text: 'Stopping after the current request...', cls: 'busy' }; setStatus($('#x-status'), 'Stopping after the current request...', 'busy'); return; }
+  if (e.target.closest('#x-del')) return xBusy ? stopWorklogs() : deleteAllFound();
   const vw = e.target.closest('[data-xview]');
   if (vw) { xView = vw.dataset.xview; renderClear(); return; }
   if (xBusy || !found) return;
@@ -1471,13 +1511,20 @@ $('#x-box').addEventListener('click', async (e) => {
   }
 });
 
-$('#x-del').onclick = () => {
+function stopWorklogs() {
+  if (!xBusy || !found) return;
+  xStop = true;
+  found.status = { text: 'Stopping...', cls: 'busy' };
+  renderClear();
+}
+
+function deleteAllFound() {
   if (xBusy || !found) return;
   const todo = found.items.filter((w) => !w.deleted);
   if (!todo.length) return;
   if (!confirm(`Delete ${todo.length} of your worklogs for ${found.from} — ${found.to}?`)) return;
   runWorklogs(todo, false);
-};
+}
 
 (async () => {
   await loadConfig();

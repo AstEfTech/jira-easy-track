@@ -32,7 +32,7 @@ You tell it how many hours you spent on each task, and it spreads them across yo
 4. **Review**: find your own worklogs for a period (**Find my worklogs**) as a table (tasks by days, default) or a list, and delete what you don't need:
    - click a table cell, or the × next to a worklog in the list, to delete it right away; click it again (↺ in the list) to restore it with the same start, duration and comment;
    - click a day in the Total row to delete all worklogs of that day (asks first);
-   - **Delete all found**, next to the search button, deletes everything found (asks first). The Stop button of this tab interrupts deleting or restoring.
+   - **Delete all found**, above the results, deletes everything found (asks first). While deleting or restoring is running, it shows the progress, and clicking it again stops the process.
 
    The Review period is set to the Tasks period on every start, then it is changed independently.
 

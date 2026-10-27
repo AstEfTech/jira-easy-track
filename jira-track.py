@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 TOKEN = secrets.token_hex(16)
 HOST_RE = re.compile(r'^(127\.0\.0\.1|localhost):\d+$')
 CONFIG_PATH = os.environ.get('JIRA_TRACK_CONFIG') or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'jira-track.config.json')
-CONFIG_KEYS = ('conn', 'jql', 'jqlTracked', 'fields', 'pinned', 'workday', 'track')
+CONFIG_KEYS = ('conn', 'jql', 'jqlTracked', 'fields', 'pinned', 'permanent', 'workday', 'track')
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -155,6 +155,7 @@ nav { display:flex; gap:4px; flex-wrap:wrap; }
 nav button { background:none; border:0; padding:0 14px; height:34px; line-height:34px; border-radius:6px; color:var(--mut); cursor:pointer; font:inherit; }
 nav button.on { background:var(--acc); color:#fff; }
 main { max-width:1200px; margin:20px auto; padding:0 24px; }
+main:has(#t-tasks.on) { max-width:1500px; }
 .tab { display:none; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; }
 .tab.on { display:block; }
 h2 { margin:0 0 14px; font-size:16px; }
@@ -189,7 +190,17 @@ th, td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--line);
 th { color:var(--mut); font-weight:500; font-size:12px; }
 td input { width:86px; }
 td.num, th.num { text-align:right; white-space:nowrap; }
-#k-table td.num, #k-table th.num { text-align:left; }
+#k-table td.num, #k-table th.num, #k-ptable td.num, #k-ptable th.num { text-align:left; }
+th.fw, td.fw { width:320px; min-width:320px; max-width:320px; overflow-wrap:anywhere; }
+th.kw, td.kw { white-space:nowrap; }
+#k-keybtn { min-width:90px; } #k-pkeybtn { min-width:160px; }
+th.sep, td.sep { border-left:1px solid var(--line); }
+th.pc, td.pc { width:100%; text-align:right; white-space:nowrap; }
+#k-table tr.pend td { border-bottom:2px solid var(--mut); }
+button.pinbtn { border:0; background:none; cursor:pointer; font:inherit; padding:0 4px; filter:grayscale(1); opacity:.35; }
+button.pinbtn:hover { opacity:.7; } button.pinbtn.on { filter:none; opacity:1; }
+#k-ptable td:last-child, #k-ptable th:last-child { width:100%; text-align:right; }
+#k-ptable button.unpin { border:0; background:none; color:var(--mut); cursor:pointer; font:inherit; padding:0 4px; }
 .help { color:var(--mut); font-size:12px; margin:6px 0 14px; padding-left:18px; line-height:1.6; }
 .help ul { margin:2px 0 4px; padding-left:18px; }
 .help b { color:var(--fg); font-weight:600; }
@@ -214,7 +225,6 @@ details.seg:not([open]) > summary { margin-bottom:0; }
 .chips .chip { margin:0; }
 .sub { text-transform:none; letter-spacing:0; margin-left:12px; color:var(--fg); font-size:12px; }
 #s-ts-sum { display:inline-block; max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
-td input.sug { font-style:italic; color:var(--mut); }
 .done td { opacity:.55; }
 a { color:var(--acc); text-decoration:none; }
 progress { width:200px; vertical-align:middle; }
@@ -268,7 +278,7 @@ header .quit { margin-left:auto; }
   </div>
   <div class="seg">
     <h3>Config file</h3>
-    <p class="hint">Saves the connection (including the token, in plain text), JQL, displayed fields, pinned tasks (with their per day hours) and the working day settings to a JSON file next to the script. Once saved, changes are written automatically and loaded on every start.</p>
+    <p class="hint">Saves the connection (including the token, in plain text), JQL, displayed fields, permanent tasks (with their per day hours), pinned tasks (📌 or Add task) and the working day settings to a JSON file next to the script. Once saved, changes are written automatically and loaded on every start.</p>
     <div class="row"><button class="btn sec" id="c-savecfg">Save to config file</button></div>
   </div>
   <details class="seg fold" open>
@@ -289,17 +299,17 @@ header .quit { margin-left:auto; }
   <details class="seg fold">
   <summary>How this works</summary>
   <ul class="help">
-    <li><b>Tracked</b>: your time already tracked on the task in the Period.</li>
-    <li><b>To track</b>: hours to add, spread across the working days of the period. If left empty, the task's original estimate from Jira is used (shown in italics; 0 if it has none). Type 0 to track nothing.</li>
-    <li><b>Per day</b>: hours logged on every working day.</li>
-    <li><b>Timing</b>: how To track is spread: evenly, towards the start, middle or end, or a random share per day.</li>
+    <li><b>Tracked in task</b>: all time logged on the task in Jira (by anyone), with the original estimate if it has one, e.g. "11h (14h estimate)". In Permanent tasks, <b>Tracked in period</b> is your own time on the task within the Period.</li>
+    <li><b>To track</b>: hours to add, spread across the working days of the period. If left empty, nothing is tracked. When the task has an original estimate in Jira, it is shown next to Tracked, e.g. "11h (14h estimate)".</li>
+    <li><b>Permanent tasks</b> (the table above the list): for dailies and the like, added with "Add permanent task" in Task source. Only Key, fields, Tracked in period and <b>Per day</b> (hours logged evenly on every working day of the Period) are set for them. The checkbox there makes the calculation skip days that already have Per day tracked on the task, and add only the missing time otherwise. They are saved to the config file and loaded on start.</li>
+    <li><b>Timing</b>: how To track is spread: towards the start (default), middle or end, evenly, or a random share per day. With "Realistic spread" the days are additionally shuffled a bit, so the hours do not follow the shape strictly.
     <li><b>Range</b>: which days a task can be tracked on. It is preset when tasks are loaded, based on the task's status history; change it per task if needed.
       <ul>
         <li><b>Task window</b>: from the task's first move into status 1 to its first move into status 2 (set in Task tracking window), within the period. Preset if the task has such a transition.</li>
         <li><b>Whole period</b>: every working day of the period. Preset if it does not.</li>
       </ul>
     </li>
-    <li><b>Pin</b>: pinned tasks (and their Per day hours) are saved to the config file; on start only pinned tasks are shown.</li>
+    <li><b>📌</b> (right edge of a row): pins the task. Pinned tasks stay in the list, move to the top and are separated by a line. They are saved to the config file.</li>
     <li><b>Hours formats</b>: 8, 1.5, 1:30, 1h 30m, 45m.</li>
   </ul>
   </details>
@@ -318,7 +328,7 @@ header .quit { margin-left:auto; }
     <summary>Distribution options<span class="sub" id="s-do-sum"></span></summary>
     <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="s-varied" style="margin:0"> Realistic spread (different hours on different days; recalculate for a new variation)</label>
     <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="s-tracked" style="margin:0"> Account for already tracked time</label>
-    <p class="hint">Your worklogs already in Jira for the period are read on Calculate: their time slots are kept free in the working day, and a task's Per day is reduced by what is already tracked on it that day. To track is always added in full.</p>
+    <p class="hint">Your worklogs already in Jira for the period are read on Calculate: their time slots are kept free in the working day, To track is always added in full.</p>
   </details>
   <details class="seg fold">
     <summary>Period<span class="sub" id="s-per-sum"></span></summary>
@@ -345,18 +355,24 @@ header .quit { margin-left:auto; }
     </div>
     <div class="row">
       <label>Add task by key<input id="k-key" placeholder="PROJ-123"></label>
-      <button class="btn" id="k-keybtn">Add</button>
+      <button class="btn" id="k-keybtn">Add task</button>
+      <button class="btn" id="k-pkeybtn">Add permanent task</button>
     </div>
   </details>
   <div class="row"><button class="btn pri" id="k-load">Load tasks</button></div>
+  <details class="seg fold" id="k-pdet" open>
+    <summary>Permanent tasks<span class="sub" id="k-psum"></span></summary>
+    <p class="hint">Permanent tasks for recurring work (dailies, meetings): Per day hours are logged on every working day of the Period, evenly. They have priority in the distribution: they are placed first, and the other tasks share the remaining time.</p>
+    <label style="display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13px"><input type="checkbox" id="k-ptop" style="margin:0"> Track only what is missing up to Per day (skip days where the task already has that much tracked)</label>
+    <div id="k-pstatus"></div>
+    <div style="overflow:auto"><table id="k-ptable"></table></div>
+  </details>
   <div class="seg">
     <h3>Tasks</h3>
     <div class="row">
       <label>Filter<input id="k-filter" placeholder="text"></label>
       <label>Filter by<select id="k-ffield"></select></label>
-      <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-only" style="margin:0"> only with hours</label>
-      <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-pinned" style="margin:0" checked> only pinned</label>
-    </div>
+      <label style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" id="k-only" style="margin:0"> only with hours</label>    </div>
     <div id="k-status"></div>
     <div style="overflow:auto;margin-bottom:12px"><table id="k-table"></table></div>
   </div>
@@ -396,7 +412,7 @@ const hm = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ''); return m ? +m
 const fmtT = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
 const fmtD = (m) => { const h = Math.floor(m / 60), r = m % 60; return (h ? h + 'h' : '') + (h && r ? ' ' : '') + (r || !h ? r + 'm' : ''); };
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const SHIFTS = [['', 'Even'], ['start', 'Start'], ['mid', 'Middle'], ['end', 'End'], ['random', 'Random']];
+const SHIFTS = [['start', 'Start'], ['mid', 'Middle'], ['end', 'End'], ['even', 'Even'], ['random', 'Random']];
 const RANGES = [['window', 'Task window'], ['period', 'Whole period']];
 
 function parseH(s) {
@@ -419,12 +435,13 @@ const DEF = {
   jql: 'assignee = currentUser() ORDER BY updated DESC',
   jqlTracked: false,
   fields: [{ id: 'summary', name: 'Summary' }],
-  pinned: [],
+  permanent: [],  // Permanent tasks (Per day)
+  pinned: [],  // tasks added with "Add task"
   track: { from: 'In Progress', to: 'Done', on: true },
   windows: {},
   plan: {},
   issues: [],
-  sched: { from: monthStart, to: today, dayStart: '10:00', dayEnd: '19:00', breakStart: '13:00', breakEnd: '14:00', step: '15', days: [1, 2, 3, 4, 5], exclude: '', include: '', varied: false, useTracked: false },
+  sched: { from: monthStart, to: today, dayStart: '10:00', dayEnd: '19:00', breakStart: '13:00', breakEnd: '14:00', step: '15', days: [1, 2, 3, 4, 5], exclude: '', include: '', varied: false, useTracked: false, perDayTop: false },
   clear: { from: monthStart, to: today },
 };
 let S;
@@ -438,9 +455,12 @@ try {
   delete S.dfilter;
   delete S.tview;
   S.track = { from: saved.track?.from || DEF.track.from, to: saved.track?.to || DEF.track.to, on: saved.track?.on !== false };
+  // Before "permanent" existed, S.pinned held the permanent tasks and S.extra the added ones.
+  if (!saved.permanent && saved.pinned) { S.permanent = saved.pinned; S.pinned = saved.extra || []; }
+  delete S.extra;
 } catch { S = structuredClone(DEF); }
-const CFG_KEYS = ['conn', 'jql', 'jqlTracked', 'fields', 'pinned', 'track'];
-const WORKDAY_KEYS = ['dayStart', 'dayEnd', 'breakStart', 'breakEnd', 'step', 'days', 'varied', 'useTracked'];
+const CFG_KEYS = ['conn', 'jql', 'jqlTracked', 'fields', 'pinned', 'permanent', 'track'];
+const WORKDAY_KEYS = ['dayStart', 'dayEnd', 'breakStart', 'breakEnd', 'step', 'days', 'varied', 'useTracked', 'perDayTop'];
 let cfgOn = false;
 let cfgTimer = null;
 // S holds the loaded issues, so it is written to localStorage once the input settles (and when the page is left).
@@ -456,7 +476,7 @@ const cfgStatus = (text, cls, title) => setBtn($('#c-savecfg'), text, cls, title
 async function saveConfig() {
   try {
     const body = Object.fromEntries(CFG_KEYS.map((k) => [k, S[k]]));
-    body.pinned = S.pinned.map((key) => ({ key, perDay: S.plan[key]?.fixed || '' }));
+    body.permanent = S.permanent.map((key) => ({ key, perDay: S.plan[key]?.fixed || '' }));
     body.workday = Object.fromEntries(WORKDAY_KEYS.map((k) => [k, S.sched[k]]));
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -478,9 +498,14 @@ async function loadConfig() {
     if (typeof c.jql === 'string' && c.jql) S.jql = c.jql;
     if (typeof c.jqlTracked === 'boolean') S.jqlTracked = c.jqlTracked;
     if (Array.isArray(c.fields) && c.fields.every((f) => f && f.id)) S.fields = c.fields.map((f) => ({ id: String(f.id), name: String(f.name || f.id) }));
-    if (Array.isArray(c.pinned)) {
-      const items = c.pinned.map((p) => (p && typeof p === 'object' ? p : { key: p })).filter((p) => p.key);
-      S.pinned = items.map((p) => String(p.key));
+    // Older configs kept the permanent tasks (objects with perDay) under "pinned".
+    const legacy = !Array.isArray(c.permanent) && Array.isArray(c.pinned) && c.pinned.some((p) => p && typeof p === 'object');
+    const permItems = legacy ? c.pinned : c.permanent;
+    if (!legacy && Array.isArray(c.pinned)) S.pinned = c.pinned.map((k) => String(k)).filter(Boolean);
+    else if (legacy) S.pinned = [];
+    if (Array.isArray(permItems)) {
+      const items = permItems.map((p) => (p && typeof p === 'object' ? p : { key: p })).filter((p) => p.key);
+      S.permanent = items.map((p) => String(p.key));
       items.forEach((p) => {
         if (typeof p.perDay !== 'string' && typeof p.perDay !== 'number') return;
         const k = String(p.key);
@@ -496,6 +521,7 @@ async function loadConfig() {
       if (Array.isArray(w.days)) S.sched.days = w.days.map(Number).filter((d) => d >= 0 && d <= 6);
       if (typeof w.varied === 'boolean') S.sched.varied = w.varied;
       if (typeof w.useTracked === 'boolean') S.sched.useTracked = w.useTracked;
+      if (typeof w.perDayTop === 'boolean') S.sched.perDayTop = w.perDayTop;
     }
     const tr = c.track;
     if (tr && typeof tr === 'object') {
@@ -593,11 +619,13 @@ async function findMyWorklogs(from, to, onProgress) {
   return items;
 }
 
-const fieldIds = () => [...new Set([...S.fields.map((f) => f.id), 'created', 'timeoriginalestimate'])];
+const fieldIds = () => [...new Set([...S.fields.map((f) => f.id), 'created', 'timeoriginalestimate', 'timespent'])];
 
+// Permanent tasks plus the pinned ones (added with "Add task"), which are listed in the main table.
 async function loadPinned(onProgress) {
-  if (!S.pinned.length) { S.issues = []; save(); return; }
-  S.issues = await searchIssues(`key in (${S.pinned.map((k) => '"' + k + '"').join(',')})`, fieldIds());
+  const keys = [...new Set([...S.permanent, ...S.pinned])];
+  if (!keys.length) { S.issues = []; save(); return; }
+  S.issues = await searchIssues(`key in (${keys.map((k) => '"' + k + '"').join(',')})`, fieldIds());
   await loadWindows(S.issues.map((i) => i.key), onProgress);
   save();
 }
@@ -615,7 +643,7 @@ async function loadIssues(onProgress) {
     list = list.concat(tracked.filter((i) => !seen.has(i.key)));
   }
   const have = new Set(list.map((i) => i.key));
-  const want = [...new Set([...S.pinned, ...Object.keys(S.plan)])];
+  const want = [...new Set([...S.permanent, ...S.pinned, ...Object.keys(S.plan)])];
   const extra = want.filter((k) => !have.has(k));
   if (extra.length) {
     try { list = (await searchIssues(`key in (${extra.map((k) => '"' + k + '"').join(',')})`, ids)).concat(list); } catch {
@@ -640,7 +668,8 @@ function val(v) {
 }
 
 let pinnedOnly = true;
-const viewIssues = () => S.issues.filter((i) => (pinnedOnly ? S.pinned.includes(i.key) : (S.jqlTracked && i.wl) || inTrackWindow(i.key)));
+// The main table: loaded tasks that are not pinned (pinned ones have their own table). Empty until "Load tasks".
+const viewIssues = () => S.issues.filter((i) => !S.permanent.includes(i.key) && (S.pinned.includes(i.key) || (!pinnedOnly && ((S.jqlTracked && i.wl) || inTrackWindow(i.key)))));
 // Issues by key, rebuilt whenever S.issues is replaced (it is never changed in place).
 let issueIdx = null, issueIdxSrc = null;
 const issueOf = (key) => {
@@ -648,12 +677,13 @@ const issueOf = (key) => {
   return issueIdx.get(key);
 };
 const estMin = (key) => Math.round((issueOf(key)?.fields?.timeoriginalestimate || 0) / 60);
-const fmtH = (m) => (m % 60 ? `${Math.floor(m / 60)}:${pad(m % 60)}` : String(m / 60));
-// Plan with To track (total) defaulted to the original estimate for the tasks in view when the user has not entered one.
+// What the user entered. The original estimate is only shown as a hint in the Tracked cell.
 function planOf() {
   const out = {};
-  for (const i of viewIssues()) { const m = estMin(i.key); if (m) out[i.key] = { total: fmtH(m) }; }
-  for (const [k, p] of Object.entries(S.plan)) out[k] = { ...p, total: p.total || out[k]?.total || '' };
+  // Pinned tasks: Per day only, evenly over the whole period. Other tasks: To track only.
+  for (const [k, p] of Object.entries(S.plan)) {
+    out[k] = S.permanent.includes(k) ? { fixed: p.fixed, shift: 'even', range: 'period' } : { ...p, fixed: '' };
+  }
   return out;
 }
 
@@ -739,43 +769,72 @@ function listedIssues() {
   const filter = $('#k-filter').value.trim().toLowerCase();
   const only = $('#k-only').checked;
   const fcur = $('#k-ffield').value;
-  return viewIssues().filter((i) => {
+  const list = viewIssues().filter((i) => {
     const p = S.plan[i.key] || {};
     const hay = (fcur === '__key' ? i.key : val(i.fields?.[fcur])).toLowerCase();
     if (filter && !hay.includes(filter)) return false;
-    return !only || !!(p.total || estMin(i.key) || p.fixed);
+    return !only || !!p.total;
   });
+  // Pinned tasks first (the sort is stable, so the rest keeps its order).
+  return list.sort((a, b) => S.pinned.includes(b.key) - S.pinned.includes(a.key));
 }
 
 function renderTasks() {
   renderFields();
-  $('#k-pinned').checked = pinnedOnly;
   const ff = $('#k-ffield');
   const fopts = [['__key', 'Key'], ...S.fields.map((f) => [f.id, f.name])];
   let fcur = ff.value;
   if (!fopts.some((o) => o[0] === fcur)) fcur = S.fields.some((f) => f.id === 'summary') ? 'summary' : fopts[fopts.length > 1 ? 1 : 0][0];
   ff.innerHTML = fopts.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join('');
   ff.value = fcur;
-  const head = '<tr><th>Key</th>' + S.fields.map((f) => `<th>${esc(f.name)}</th>`).join('') + '<th class="num" title="Your time already tracked on the task in the Period">Tracked</th><th class="num">To track</th><th class="num">Per day</th><th>Timing</th><th>Range</th><th>Tracking window</th><th>Pin</th></tr>';
+  const head = headRow('<th class="num sep" title="All time logged on the task by everyone (Jira), with the original estimate if set">Tracked in task</th>', '<th class="num">To track</th><th>Timing</th><th>Range</th><th>Tracking window</th><th class="pc"></th>');
   const visible = viewIssues();
-  const rows = listedIssues().map((i) => {
+  const listed = listedIssues();
+  const lastPin = listed.findLastIndex((i) => S.pinned.includes(i.key));
+  const rows = listed.map((i, n) => {
     const p = S.plan[i.key] || {};
-    const est = estMin(i.key);
-    const tot = p.total || (est ? fmtH(est) : '');
-    const cells = S.fields.map((f) => { const v = val(i.fields?.[f.id]); return `<td>${esc(v.length > 200 ? v.slice(0, 200) + '…' : v)}</td>`; }).join('');
-    return `<tr><td>${link(i.key)}</td>${cells}` +
-      `<td class="num" data-trk="${esc(i.key)}">${esc(trackedText(i.key))}</td>` +
-      `<td class="num"><input${!p.total && est ? ' class="sug"' : ''} data-k="${esc(i.key)}" data-f="total" value="${esc(tot)}" placeholder="0"${est ? ` title="Original estimate: ${esc(fmtD(est))}"` : ''}></td>` +
-      `<td class="num"><input data-k="${esc(i.key)}" data-f="fixed" value="${esc(p.fixed || '')}" placeholder="0"></td>` +
-      `<td><select data-k="${esc(i.key)}" data-f="shift">${SHIFTS.map(([v, l]) => `<option value="${v}"${(p.shift || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
+    const pin = S.pinned.includes(i.key);
+    return `<tr${n === lastPin && n < listed.length - 1 ? ' class="pend"' : ''}>${keyFieldCells(i.key)}` +
+      `<td class="num sep">${esc(trackedCell(i.key))}</td>` +
+      `<td class="num"><input data-k="${esc(i.key)}" data-f="total" value="${esc(p.total || '')}" placeholder="0"></td>` +
+      `<td><select data-k="${esc(i.key)}" data-f="shift">${SHIFTS.map(([v, l]) => `<option value="${v}"${(p.shift || 'start') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
       `<td><select data-k="${esc(i.key)}" data-f="range">${RANGES.map(([v, l]) => `<option value="${v}"${effRange(i.key) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>` +
       `<td class="tw" data-tw="${esc(i.key)}" style="white-space:nowrap">${esc(twText(i.key))}</td>` +
-      `<td><input type="checkbox" style="width:auto" data-pin="${esc(i.key)}"${S.pinned.includes(i.key) ? ' checked' : ''}></td></tr>`;
+      `<td class="pc"><button class="pinbtn${pin ? ' on' : ''}" data-pin="${esc(i.key)}" title="${pin ? 'Unpin' : 'Pin to the top'}">📌</button></td></tr>`;
   }).join('');
   $('#k-table').innerHTML = head + rows;
+  renderPinned();
   if (S.conn.token && periodOk() && !trackedFresh()) scheduleTracked();
-  $('#k-status').innerHTML = visible.length ? '' : `<p class="hint">${pinnedOnly ? 'No pinned tasks. Untick "only pinned" or click "Load tasks", then pin the ones you need.' : 'Click "Load tasks".'}</p>`;
+  $('#k-status').innerHTML = visible.length ? '' : `<p class="hint">${pinnedOnly ? 'Click "Load tasks".' : 'No tasks to show.'}</p>`;
   renderStats();
+}
+
+// Header and the Key + fields cells shared by both tables. Key has a fixed one-line width from the longest known key, fields a fixed width.
+const keyColW = () => `calc(${Math.ceil(Math.max(6, ...S.issues.map((i) => i.key.length), ...S.permanent.map((k) => k.length)) * 1.15)}ch + 20px)`;
+// The first app column (Tracked) is separated from the Jira columns by a vertical line.
+const headRow = (tracked, tail) => `<tr><th class="kw" style="width:${keyColW()}">Key</th>` + S.fields.map((f) => `<th class="fw">${esc(f.name)}</th>`).join('') + tracked + tail + '</tr>';
+function keyFieldCells(key) {
+  const i = issueOf(key);
+  const cells = S.fields.map((f) => { const v = val(i?.fields?.[f.id]); return `<td class="fw">${esc(v.length > 200 ? v.slice(0, 200) + '…' : v)}</td>`; }).join('');
+  return `<td class="kw">${link(key)}</td>${cells}`;
+}
+// Pinned (permanent) tasks: Key, fields, Tracked and Per day only; Timing is Even and Range is Whole period.
+function renderPinned() {
+  const keys = S.permanent;
+  const head = headRow('<th class="num sep" title="Your time tracked on the task within the Period">Tracked in period</th>', '<th class="num">Per day</th><th></th>');
+  const rows = keys.map((key) => {
+    return `<tr>${keyFieldCells(key)}` +
+      `<td class="num sep" data-trk="${esc(key)}">${esc(trackedText(key))}</td>` +
+      `<td class="num"><input data-k="${esc(key)}" data-f="fixed" value="${esc(S.plan[key]?.fixed || '')}" placeholder="0"></td>` +
+      `<td><button class="unpin" data-unpin="${esc(key)}" title="Unpin">×</button></td></tr>`;
+  }).join('');
+  $('#k-ptable').innerHTML = keys.length ? head + rows : '';
+  $('#k-pstatus').innerHTML = keys.length ? '' : '<p class="hint">No permanent tasks. Add one by its key above.</p>';
+  pinnedSummary();
+}
+function pinnedSummary() {
+  const perDay = S.permanent.reduce((a, k) => a + (parseH(S.plan[k]?.fixed) || 0), 0);
+  $('#k-psum').textContent = S.permanent.length ? `${S.permanent.length} task${S.permanent.length > 1 ? 's' : ''}${perDay ? ` · ${fmtD(perDay)} per day` : ''}` : '';
 }
 
 // Dates are shown only for the "Task window" range; a single date when start and end are the same day.
@@ -810,28 +869,45 @@ $('#k-table').addEventListener('input', (e) => {
   const p = (S.plan[el.dataset.k] ??= { total: '', fixed: '', shift: '', range: '' });
   p[el.dataset.f] = el.value.trim();
   if (el.tagName === 'INPUT') el.classList.toggle('bad', Number.isNaN(parseH(el.value)));
-  if (el.dataset.f === 'total') el.classList.remove('sug');
   if (!p.total && !p.fixed && !p.shift && !p.range) delete S.plan[el.dataset.k];
   save();
   if (el.dataset.f === 'range') { const c = el.closest('tr').querySelector('.tw'); if (c) c.textContent = twText(el.dataset.k); }
   renderStats();
 });
-$('#k-table').addEventListener('change', (e) => {
+$('#k-ptable').addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el.dataset.k) return;
+  const p = (S.plan[el.dataset.k] ??= { total: '', fixed: '', shift: '', range: '' });
+  p.fixed = el.value.trim();
+  el.classList.toggle('bad', Number.isNaN(parseH(el.value)));
+  if (!p.total && !p.fixed && !p.shift && !p.range) delete S.plan[el.dataset.k];
+  save();
+  pinnedSummary();
+  renderStats();
+});
+$('#k-table').addEventListener('click', (e) => {
   const key = e.target.dataset.pin;
   if (!key) return;
-  S.pinned = S.pinned.filter((k) => k !== key);
-  if (e.target.checked) S.pinned.push(key);
+  S.pinned = S.pinned.includes(key) ? S.pinned.filter((k) => k !== key) : [...S.pinned, key];
   save();
-  renderStats();
+  renderTasks();
+});
+$('#k-ptable').addEventListener('click', (e) => {
+  const key = e.target.dataset.unpin;
+  if (!key) return;
+  S.permanent = S.permanent.filter((k) => k !== key);
+  if (S.plan[key]) { S.plan[key].fixed = ''; const p = S.plan[key]; if (!p.total && !p.shift && !p.range) delete S.plan[key]; }
+  save();
+  renderTasks();
 });
 $('#k-filter').oninput = renderTasks;
 $('#k-ffield').onchange = renderTasks;
 $('#k-only').onchange = renderTasks;
 $('#k-jqltr').onchange = (e) => { S.jqlTracked = e.target.checked; save(); renderTasks(); };
-$('#k-pinned').onchange = (e) => { pinnedOnly = e.target.checked; reload(); };
 $('#k-clear').onclick = () => {
   if (!confirm('Remove loaded tasks, entered hours, cached task history and the current distribution from this browser?')) return;
   S.issues = [];
+  S.pinned = [];
   S.plan = {};
   S.windows = {};
   P = null;
@@ -892,16 +968,23 @@ $('#k-addbtn').onclick = async () => {
   reload();
 };
 
-$('#k-keybtn').onclick = async () => {
+// Adds the task typed in "Add task by key" to the main list (S.pinned, saved to the config) or to the permanent tasks (S.permanent).
+async function addByKey(btn, listName) {
+  if (btn.disabled) return;
   const key = $('#k-key').value.trim().toUpperCase();
-  if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) return setStatus($('#k-status'), 'Invalid issue key', 'err');
-  const had = S.pinned.includes(key);
-  if (!had) S.pinned.push(key);
-  try { await (pinnedOnly ? loadPinned : loadIssues)(); $('#k-key').value = ''; renderTasks(); } catch (e) {
-    if (!had) S.pinned = S.pinned.filter((k) => k !== key);
-    setStatus($('#k-status'), e.message, 'err');
-  }
-};
+  if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) return setBtn(btn, 'Bad key', 'err', 'Invalid issue key');
+  if (listName === 'pinned' && S.permanent.includes(key)) return setBtn(btn, 'Permanent', 'err', 'This task is already in Permanent tasks');
+  const had = S[listName].includes(key);
+  if (!had) S[listName].push(key);
+  btn.disabled = true;
+  setBtn(btn, 'Adding...', 'busy');
+  try { await (pinnedOnly ? loadPinned : loadIssues)(); $('#k-key').value = ''; renderTasks(); setBtn(btn, ''); } catch (e) {
+    if (!had) S[listName] = S[listName].filter((k) => k !== key);
+    setBtn(btn, 'Error', 'err', e.message);
+  } finally { btn.disabled = false; }
+}
+$('#k-keybtn').onclick = () => addByKey($('#k-keybtn'), 'pinned');
+$('#k-pkeybtn').onclick = () => addByKey($('#k-pkeybtn'), 'permanent');
 
 // ---------- 2. schedule ----------
 function renderTrackOptions() {
@@ -909,6 +992,7 @@ function renderTrackOptions() {
   if (!catalog && !catalogTried && S.conn.token) { catalogTried = true; loadCatalog(); }
   $('#s-varied').checked = !!S.sched.varied;
   $('#s-tracked').checked = !!S.sched.useTracked;
+  $('#k-ptop').checked = !!S.sched.perDayTop;
   $('#t-on').checked = !!S.track.on;
   renderStats();
 }
@@ -919,6 +1003,7 @@ function renderSched() {
 }
 $('#s-varied').onchange = (e) => { S.sched.varied = e.target.checked; save(); renderStats(); };
 $('#s-tracked').onchange = (e) => { S.sched.useTracked = e.target.checked; save(); renderStats(); };
+$('#k-ptop').onchange = (e) => { S.sched.perDayTop = e.target.checked; save(); };
 
 let statusList = [];
 let statusTried = false;
@@ -1048,7 +1133,7 @@ function freeSegs(g, busy) {
 // tracked: own worklogs already in Jira for the period (see findMyWorklogs), empty unless the option is on.
 function planTasks(days, tracked, warnings) {
   const tasks = Object.entries(planOf())
-    .map(([key, p]) => ({ key, total: parseH(p.total) || 0, fixed: parseH(p.fixed) || 0, shift: p.shift || '', range: p.range || defaultRange(key) }))
+    .map(([key, p]) => ({ key, total: parseH(p.total) || 0, fixed: parseH(p.fixed) || 0, shift: p.shift || 'start', range: p.range || defaultRange(key) }))
     .filter((t) => t.total > 0 || t.fixed > 0);
   const ranges = {};
   tasks.forEach((t) => {
@@ -1067,7 +1152,7 @@ function planTasks(days, tracked, warnings) {
     const td = (trackedDay[w.key] ??= {});
     td[w.date] = (td[w.date] || 0) + w.min;
     trackedBy[w.key] = (trackedBy[w.key] || 0) + w.min;
-    (busy[w.date] ??= []).push([w.start, w.start + w.min]);
+    if (S.sched.useTracked) (busy[w.date] ??= []).push([w.start, w.start + w.min]);
   });
   return { tasks, ranges, trackedDay, trackedBy, busy };
 }
@@ -1086,11 +1171,13 @@ function layout(tracked = []) {
   const cap = free.map((segs) => Math.floor(segs.reduce((a, [s, e]) => a + e - s, 0) / step));
   const alloc = days.map(() => []);
 
+  // Permanent tasks (Per day) go first: they take the day's capacity and the earliest slots, To track is spread over what is left.
   tasks.filter((t) => t.fixed > 0).forEach((t) => {
     let cut = false;
     days.forEach((date, d) => {
       if (!t.ok[d]) return;
-      const done = trackedDay[t.key]?.[date] || 0;
+      // "Track only what is missing": the time the task already has on this day counts towards Per day.
+      const done = S.sched.perDayTop ? trackedDay[t.key]?.[date] || 0 : 0;
       const u = done ? Math.round(Math.max(0, t.fixed - done) / step) : units(t.fixed);
       if (!u) return;
       const x = Math.min(u, cap[d]);
@@ -1109,7 +1196,7 @@ function layout(tracked = []) {
     if (!M) return;
     const per = days.map(() => 0);
     const rot = Math.floor((ti * M) / varTasks.length);
-    const w = idx.map((d, k) => shiftWeight(t.shift, M > 1 ? k / (M - 1) : 0.5) * dayF[d] * (S.sched.varied ? 0.75 + Math.random() * 0.5 : 1));
+    const w = idx.map((d, k) => shiftWeight(t.shift, M > 1 ? k / (M - 1) : 0.5) * dayF[d] * (S.sched.varied ? 0.4 + Math.random() * 1.2 : 1));
     const wSum = w.reduce((a, x) => a + x, 0);
     const deficit = (k) => (U * w[k]) / wSum - per[idx[k]];
     for (let n = 0; n < U; n++) {
@@ -1186,8 +1273,15 @@ function trackedText(key) {
   const m = trackedSums().byKey[key] || 0;
   return m ? fmtD(m) : '';
 }
+// Tracked in task: all time logged on the task in Jira (by anyone, ever), followed by the original estimate: "11h (14h estimate)".
+function trackedCell(key) {
+  const est = estMin(key);
+  const spent = Math.round((issueOf(key)?.fields?.timespent || 0) / 60);
+  const t = spent ? fmtD(spent) : '';
+  return est ? `${t} (${fmtD(est)} estimate)`.trim() : t;
+}
 const updateTrackedCells = () => {
-  document.querySelectorAll('#k-table [data-trk]').forEach((td) => {
+  document.querySelectorAll('#k-ptable [data-trk]').forEach((td) => {
     td.textContent = trackedText(td.dataset.trk);
     td.title = trackedFresh() && trackedCache.err ? trackedCache.err : '';
   });
@@ -1217,7 +1311,7 @@ function renderStats() {
   }
   // planned: what the user entered for the tasks shown in the list; the tasks' Tracking windows are not applied here.
   const listed = new Set(listedIssues().map((i) => i.key));
-  const plan = Object.entries(planOf()).filter(([k]) => listed.has(k)).map(([, p]) => p);
+  const plan = Object.entries(planOf()).filter(([k]) => listed.has(k) || S.permanent.includes(k)).map(([, p]) => p);
   const toTrack = plan.reduce((a, p) => a + (parseH(p.total) || 0), 0);
   const perDay = plan.reduce((a, p) => a + (parseH(p.fixed) || 0), 0);
   const planned = toTrack + perDay * days.length;
@@ -1237,7 +1331,7 @@ function renderStats() {
     s.useTracked ? `<b>already tracked</b> = your worklogs on all tasks from ${esc(s.from)} to ${esc(s.to)} = ${pending ? '...' : fmtD(trackedTot)}` : '',
     s.useTracked ? `<b>available</b> = ${fmtD(work)} total working time − ${pending ? '...' : fmtD(trackedTot)} already tracked = ${pending ? '...' : fmtD(available)}`
       : `<b>available</b> = total working time = ${fmtD(available)} (already tracked time is not subtracted: "Account for already tracked time" is off)`,
-    `<b>planned</b> = ${fmtD(toTrack)} To track + ${fmtD(perDay)} Per day × ${days.length} working days = ${fmtD(planned)} (tasks shown in the list); shown in red when it exceeds available`,
+    `<b>planned</b> = ${fmtD(toTrack)} To track (tasks shown in the list) + ${fmtD(perDay)} Per day (permanent tasks) × ${days.length} working days = ${fmtD(planned)}; shown in red when it exceeds available`,
     'The Tracking window of each task is not taken into account in these numbers.',
   ].filter(Boolean).map((x) => `<li>${x}</li>`).join('');
 }
@@ -1251,7 +1345,8 @@ function calcStatus(text, cls, title) {
 
 $('#s-calc').onclick = async () => {
   const useTracked = S.sched.useTracked;
-  if (!useTracked && P && P.entries.some((e) => e.done) && !confirm('Some entries were already sent. Recalculating and sending again will create duplicates. Continue?')) return;
+  const needTracked = useTracked || S.sched.perDayTop;
+  if (!needTracked && P && P.entries.some((e) => e.done) && !confirm('Some entries were already sent. Recalculating and sending again will create duplicates. Continue?')) return;
   const btn = $('#s-calc');
   if (btn.disabled) return;
   btn.disabled = true;
@@ -1261,7 +1356,7 @@ $('#s-calc').onclick = async () => {
   try {
     await ensureWindows((d, n) => calcStatus(`History ${d}/${n}`, 'busy', 'Reading task history'));
     const { from, to } = S.sched;
-    if (useTracked && from && to && from <= to) tracked = await loadTracked((n, total) => calcStatus(`Worklogs ${n}/${total}`, 'busy', 'Reading tracked time'));
+    if (needTracked && from && to && from <= to) tracked = await loadTracked((n, total) => calcStatus(`Worklogs ${n}/${total}`, 'busy', 'Reading tracked time'));
     calcStatus(again ? 'Recalculating...' : 'Calculating...', 'busy');
     await new Promise((res) => setTimeout(res));  // let the status paint before the synchronous layout
   } catch (e) { btn.disabled = false; calcStatus(e.message, 'err'); return; }
@@ -1269,7 +1364,7 @@ $('#s-calc').onclick = async () => {
   const r = layout(tracked);
   calcStatus('');
   if (r.error) return alert(r.error);
-  if (!r.entries.length) return alert(useTracked && tracked.length ? 'Nothing left to distribute: the hours are already tracked or the working days are full.' : 'No tasks with hours. Fill in hours on the Tasks tab.');
+  if (!r.entries.length) return alert(needTracked && tracked.length ? 'Nothing left to distribute: the hours are already tracked or the working days are full.' : 'No tasks with hours. Fill in hours on the Tasks tab.');
   P = { entries: r.entries, warnings: r.warnings, ranges: r.ranges, days: r.days, trackedBy: useTracked ? r.trackedBy : null };
   show('prev');
   calcStatus(again ? 'Recalculated' : 'Calculated', 'okc', `${again ? 'Recalculated' : 'Calculated'} at ${new Date().toLocaleTimeString()}`);
@@ -1581,7 +1676,7 @@ function deleteAllFound() {
   renderStatusOptions();
   flushLS();
   show(cfgOn ? 'tasks' : 'conn');
-  if (cfgOn && S.conn.token && S.pinned.length) reload();
+  if (cfgOn && S.conn.token && (S.permanent.length || S.pinned.length)) reload();
 })();
 </script>
 </body>

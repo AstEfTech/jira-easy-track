@@ -273,7 +273,7 @@ header .quit { margin-left:auto; }
     <label>Jira URL<input class="wide" id="c-base" placeholder="https://company.atlassian.net"></label>
     <label>Email<input class="wide" id="c-email" autocomplete="off"></label>
     <label>API token<input class="wide" id="c-token" type="password" autocomplete="off"></label>
-    <p class="hint">Create a token at id.atlassian.com/manage-profile/security/api-tokens. It is stored only in this browser's localStorage and is sent only to Jira through the local server.</p>
+    <p class="hint">Create a token at <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">id.atlassian.com/manage-profile/security/api-tokens</a>. It is stored only in this browser's localStorage and is sent only to Jira through the local server.</p>
     <div class="row"><button class="btn pri" id="c-test">Test and save</button></div>
   </div>
   <div class="seg">

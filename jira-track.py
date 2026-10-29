@@ -274,6 +274,42 @@ header .quit { margin-left:auto; }
     <label>Email<input class="wide" id="c-email" autocomplete="off"></label>
     <label>API token<input class="wide" id="c-token" type="password" autocomplete="off"></label>
     <p class="hint">Create a token at <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">id.atlassian.com/manage-profile/security/api-tokens</a>. It is stored only in this browser's localStorage and is sent only to Jira through the local server.</p>
+    <details class="fold">
+      <summary>Required permissions for user and token</summary>
+      <p class="hint">Jira project permissions (no admin rights needed):</p>
+      <ol class="hint">
+        <li><b>Browse Projects</b>: search tasks, read worklogs</li>
+        <li><b>Work On Issues</b>: add and restore worklogs</li>
+        <li><b>Delete Own Worklogs</b>: delete worklogs in Review</li>
+        <li><b>View All Worklogs</b> (optional): without it only your own worklogs are visible</li>
+        <li><b>Time tracking</b> must be enabled in Jira</li>
+      </ol>
+      <p class="hint">Classic scopes, only for a scoped token:</p>
+      <ol class="hint">
+        <li><b>read:jira-user</b></li>
+        <li><b>read:jira-work</b></li>
+        <li><b>write:jira-work</b></li>
+      </ol>
+      <p class="hint">Or granular scopes instead:</p>
+      <ol class="hint">
+        <li><b>read:user:jira</b></li>
+        <li><b>read:issue-details:jira</b></li>
+        <li><b>read:audit-log:jira</b></li>
+        <li><b>read:avatar:jira</b></li>
+        <li><b>read:field-configuration:jira</b></li>
+        <li><b>read:issue-meta:jira</b></li>
+        <li><b>read:issue.changelog:jira</b></li>
+        <li><b>read:issue-worklog:jira</b></li>
+        <li><b>read:issue-worklog.property:jira</b></li>
+        <li><b>read:group:jira</b></li>
+        <li><b>read:project-role:jira</b></li>
+        <li><b>read:field:jira</b></li>
+        <li><b>read:status:jira</b></li>
+        <li><b>write:issue-worklog:jira</b></li>
+        <li><b>delete:issue-worklog:jira</b></li>
+      </ol>
+      <p class="hint">A plain token without scopes is recommended: scoped tokens usually work only through api.atlassian.com, which this app does not use.</p>
+    </details>
     <div class="row"><button class="btn pri" id="c-test">Test and save</button></div>
   </div>
   <div class="seg">

@@ -9,7 +9,7 @@ You tell it how many hours you spent on each task, and it spreads them across yo
 
 ## How it works
 
-1. **Setup**: enter your Jira Cloud URL, email and [API token](https://id.atlassian.com/manage-profile/security/api-tokens) and press **Test and save**. Here you also set the working day (start/end, an optional break, step of 5-60 minutes) and the working weekdays, and can save everything to a config file.
+1. **Setup**: enter your Jira Cloud URL, email and [API token](https://id.atlassian.com/manage-profile/security/api-tokens) and press **Test and save** (the required Jira permissions are listed in a collapsed hint under the token field). Here you also set the working day (start/end, an optional break, step of 5-60 minutes) and the working weekdays, and can save everything to a config file.
 2. **Tasks**:
    - **Period**: dates "From" and "To", plus optional days off / holidays and extra working days (`YYYY-MM-DD`, comma-separated).
    - **Task source**: an editable JQL (default: assigned to you), a checkbox to also add the tasks you tracked time on in the period (they are listed even outside the tracking window filter), and the fields to display (Key and Summary by default) and adding a task by key (**Add task** puts it in the list, **Add permanent task** in Permanent tasks). Press **Load tasks** to fetch them.

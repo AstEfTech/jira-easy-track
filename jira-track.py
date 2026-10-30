@@ -1071,7 +1071,7 @@ function renderSched() {
 }
 $('#s-varied').onchange = (e) => { S.sched.varied = e.target.checked; save(); renderStats(); };
 $('#s-tracked').onchange = (e) => { S.sched.useTracked = e.target.checked; save(); renderStats(); };
-$('#k-ptop').onchange = (e) => { S.sched.perDayTop = e.target.checked; save(); };
+$('#k-ptop').onchange = (e) => { S.sched.perDayTop = e.target.checked; save(); renderStats(); };
 
 let statusList = [];
 let statusTried = false;
@@ -1370,8 +1370,9 @@ function renderStats() {
   const days = workDays();
   if (!g || !days.length) { el.textContent = 'Check the period and working day times'; how.innerHTML = ''; return; }
   // With the option on, "already tracked" always keeps its place: "..." while loading, "error" on failure.
+  // "Track only what is missing" needs the same worklogs to reduce Per day.
   let tracked = [], trackedCell = '';
-  if (s.useTracked) {
+  if (s.useTracked || s.perDayTop) {
     if (!S.conn.token) trackedCell = '<span class="err" title="Fill in the Setup tab first">error</span>';
     else if (!trackedFresh()) { trackedCell = '...'; scheduleTracked(); }
     else if (trackedCache.err) trackedCell = `<span class="err" title="${esc(trackedCache.err)}">error</span>`;
@@ -1382,12 +1383,15 @@ function renderStats() {
   const plan = Object.entries(planOf()).filter(([k]) => listed.has(k) || S.permanent.includes(k));
   const toTrack = plan.reduce((a, [, p]) => a + (parseH(p.total) || 0), 0);
   // Each permanent task counts only the days selected for it.
-  const perDay = plan.reduce((a, [k, p]) => a + (parseH(p.fixed) || 0) * days.filter((d) => pdOn(k, d)).length, 0);
+  // With "Track only what is missing" each day counts Per day minus the task's own worklogs that day.
+  const own = {};
+  if (s.perDayTop) tracked.forEach((w) => { const o = (own[w.key] ??= {}); o[w.date] = (o[w.date] || 0) + w.min; });
+  const perDay = plan.reduce((a, [k, p]) => a + days.filter((d) => pdOn(k, d)).reduce((b, d) => b + Math.max(0, (parseH(p.fixed) || 0) - (own[k]?.[d] || 0)), 0), 0);
   const planned = toTrack + perDay;
   const work = days.length * g.len;
-  const trackedTot = tracked.reduce((a, w) => a + w.min, 0);
+  const trackedTot = s.useTracked ? tracked.reduce((a, w) => a + w.min, 0) : 0;
   const available = Math.max(0, work - trackedTot);
-  const pending = s.useTracked && trackedCell;
+  const pending = (s.useTracked || s.perDayTop) && trackedCell;
   el.innerHTML = `Working days: <b>${days.length}</b> · per day: <b>${fmtD(g.len)}</b> · total working time: <b>${fmtD(work)}</b>` +
     (s.useTracked ? ` · already tracked: <b>${trackedCell || fmtD(trackedTot)}</b>` : '') +
     ` · available: <b>${pending ? '...' : fmtD(available)}</b> · planned: <b class="${!pending && planned > available ? 'err' : ''}">${fmtD(planned)}</b>`;
@@ -1400,7 +1404,7 @@ function renderStats() {
     s.useTracked ? `<b>already tracked</b> = your worklogs on all tasks from ${esc(s.from)} to ${esc(s.to)} = ${pending ? '...' : fmtD(trackedTot)}` : '',
     s.useTracked ? `<b>available</b> = ${fmtD(work)} total working time − ${pending ? '...' : fmtD(trackedTot)} already tracked = ${pending ? '...' : fmtD(available)}`
       : `<b>available</b> = total working time = ${fmtD(available)} (already tracked time is not subtracted: "Account for already tracked time" is off)`,
-    `<b>planned</b> = ${fmtD(toTrack)} To track (tasks shown in the list) + ${fmtD(perDay)} Per day (permanent tasks, each × its selected working days) = ${fmtD(planned)}; shown in red when it exceeds available`,
+    `<b>planned</b> = ${fmtD(toTrack)} To track (tasks shown in the list) + ${fmtD(perDay)} Per day (permanent tasks, each × its selected working days${s.perDayTop ? ', minus what they already have tracked each day: "Track only what is missing"' : ''}) =${fmtD(planned)}; shown in red when it exceeds available`,
     'The Tracking window of each task is not taken into account in these numbers.',
   ].filter(Boolean).map((x) => `<li>${x}</li>`).join('');
 }

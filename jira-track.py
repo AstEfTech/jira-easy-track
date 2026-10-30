@@ -144,34 +144,45 @@ HTML = r'''
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jira Easy Track</title>
+<script>try { const t = localStorage.getItem('jiraTrackTheme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <style>
-:root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --fg:#1d2330; --mut:#6b7385; --line:#dfe3ea; --acc:#2563eb; --bad:#dc2626; --ok:#16a34a; }
-@media (prefers-color-scheme: dark) { :root { --bg:#14171d; --card:#1c2029; --fg:#e6e9f0; --mut:#98a1b3; --line:#2c3240; --acc:#5b8def; } }
+:root { color-scheme: light; --bg:#f7f8f9; --card:#fff; --fg:#172b4d; --mut:#626f86; --line:#dcdfe4; --acc:#0c66e4; --bad:#c9372c; --ok:#1f845a; --warn:#a54800; --hov:rgba(9,30,66,.06); --accbg:#e9f2ff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg:#1d2125; --card:#22272b; --fg:#c7d1db; --mut:#8c9bab; --line:#38414a; --acc:#579dff; --bad:#f87168; --ok:#4bce97; --warn:#f5cd47; --hov:rgba(255,255,255,.08); --accbg:#09326c; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg:#1d2125; --card:#22272b; --fg:#c7d1db; --mut:#8c9bab; --line:#38414a; --acc:#579dff; --bad:#f87168; --ok:#4bce97; --warn:#f5cd47; --hov:rgba(255,255,255,.08); --accbg:#09326c; }
 * { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, Segoe UI, sans-serif; }
-header { display:flex; gap:24px; align-items:center; padding:10px 24px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:2; }
-h1 { font-size:17px; margin:0; }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+header { display:flex; gap:24px; align-items:center; padding:8px 24px; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 1px 1px rgba(9,30,66,.1); position:sticky; top:0; z-index:2; }
+h1 { font-size:16px; font-weight:700; margin:0; }
 nav { display:flex; gap:4px; flex-wrap:wrap; }
-nav button { background:none; border:0; padding:0 14px; height:34px; line-height:34px; border-radius:6px; color:var(--mut); cursor:pointer; font:inherit; }
-nav button.on { background:var(--acc); color:#fff; }
-main { max-width:1200px; margin:20px auto; padding:0 24px; }
+nav button { background:none; border:0; padding:0 12px; height:32px; line-height:32px; border-radius:3px; color:var(--mut); cursor:pointer; font:inherit; font-weight:500; }
+nav button:hover { background:var(--hov); color:var(--fg); }
+nav button.on { background:var(--accbg); color:var(--acc); }
+main { max-width:1200px; margin:24px auto; padding:0 24px; }
 main:has(#t-tasks.on) { max-width:1500px; }
-.tab { display:none; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; }
+.tab { display:none; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:24px; }
 .tab.on { display:block; }
 h2 { margin:0 0 14px; font-size:16px; }
 h3 { margin:18px 0 6px; font-size:14px; }
 h3 small { color:var(--mut); font-weight:400; margin-left:8px; }
 label { display:block; margin-bottom:10px; color:var(--mut); font-size:12px; }
 label input, label select { display:block; margin-top:3px; }
-input, select { font:inherit; padding:6px 9px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); min-width:0; }
+input, select { font:inherit; padding:6px 9px; border:1px solid var(--line); border-radius:3px; background:var(--card); color:var(--fg); min-width:0; }
+input:hover, select:hover { background:var(--hov); }
+input:focus, select:focus { outline:2px solid var(--acc); outline-offset:-1px; background:var(--card); }
 input.bad { border-color:var(--bad); }
 .row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px; }
 .row label { margin:0; }
 .grow { flex:1; min-width:240px; } .grow input { width:100%; }
 .wide { width:100%; max-width:480px; }
-button.btn { font:inherit; padding:0 14px; height:34px; line-height:32px; vertical-align:middle; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+button.btn { font:inherit; font-weight:500; padding:0 12px; height:32px; line-height:30px; vertical-align:middle; border-radius:3px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+button.btn:not(:disabled):hover { background:var(--hov); }
 button.pri { background:var(--acc); border-color:var(--acc); color:#fff; }
+button.pri:not(:disabled):hover { background:var(--acc); filter:brightness(1.12); }
 button.danger { background:var(--bad); border-color:var(--bad); color:#fff; }
+button.danger:not(:disabled):hover { background:var(--bad); filter:brightness(1.12); }
+html[data-theme="dark"] button.pri, html[data-theme="dark"] button.danger { color:#101214; }
+@media (prefers-color-scheme: dark) { html:not([data-theme="light"]) button.pri, html:not([data-theme="light"]) button.danger { color:#101214; } }
+#theme { width:32px; padding:0; font-size:15px; }
 button.sec { border-color:var(--acc); color:var(--acc); font-weight:500; }
 button.sec:not(:disabled):hover { background:color-mix(in srgb, var(--acc) 12%, var(--card)); }
 .btn.sec .busy::before { border-color:color-mix(in srgb, var(--acc) 30%, transparent); border-top-color:var(--acc); }
@@ -187,7 +198,8 @@ button:disabled { opacity:.5; cursor:default; }
 .btn.pri .busy::before, .btn.danger .busy::before { border-color:rgba(255,255,255,.35); border-top-color:#fff; }
 table { border-collapse:collapse; width:100%; }
 th, td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
-th { color:var(--mut); font-weight:500; font-size:12px; }
+th { color:var(--mut); font-weight:600; font-size:12px; }
+tbody tr:hover > td:not(.stk) { background:var(--hov); }
 td input { width:86px; }
 td.num, th.num { text-align:right; white-space:nowrap; }
 #k-table td.num, #k-table th.num, #k-ptable td.num, #k-ptable th.num { text-align:left; }
@@ -211,12 +223,12 @@ button.pinbtn:hover { opacity:.7; } button.pinbtn.on { filter:none; opacity:1; }
 .chip button { border:0; background:none; cursor:pointer; color:var(--mut); font-size:14px; }
 .days { display:flex; gap:12px; flex-wrap:wrap; }
 .days label { display:flex; gap:5px; align-items:center; margin:0; color:var(--fg); font-size:13px; }
-.warn { color:#b45309; margin:6px 0; padding-left:18px; }
-.stat { background:var(--bg); border-radius:8px; padding:10px 14px; margin:12px 0; }
+.warn { color:var(--warn); margin:6px 0; padding-left:18px; }
+.stat { background:var(--bg); border:1px solid var(--line); border-radius:3px; padding:10px 14px; margin:12px 0; }
 details.stat > summary { cursor:pointer; }
 .stat .how { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12px; line-height:1.7; }
 .stat .how b { color:var(--fg); font-weight:600; }
-.seg { border:1px solid var(--line); border-radius:8px; padding:12px 16px 4px; margin-bottom:14px; }
+.seg { border:1px solid var(--line); border-radius:6px; padding:12px 16px 4px; margin-bottom:14px; }
 .seg > h3 { margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
 details.fold > summary { cursor:pointer; user-select:none; color:var(--mut); font-size:12px; margin-bottom:8px; }
 details.seg > summary { font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin:0 0 10px; }
@@ -231,15 +243,16 @@ details.seg:not([open]) > summary { margin-bottom:0; }
 .done td { opacity:.55; }
 a { color:var(--acc); text-decoration:none; }
 progress { width:200px; vertical-align:middle; }
-.views { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; margin-left:auto; }
-.views button { border:0; background:var(--card); color:var(--mut); padding:0 14px; height:32px; line-height:32px; cursor:pointer; font:inherit; }
-.views button.on { background:var(--acc); color:#fff; }
+.views { display:inline-flex; border:1px solid var(--line); border-radius:3px; overflow:hidden; margin-left:auto; }
+.views button { border:0; background:var(--card); color:var(--mut); padding:0 14px; height:32px; line-height:32px; cursor:pointer; font:inherit; font-weight:500; }
+.views button:hover { background:var(--hov); }
+.views button.on { background:var(--accbg); color:var(--acc); }
 .ptable { width:auto; min-width:100%; }
 .ptable th.c, .ptable td.c { text-align:center; white-space:nowrap; padding:4px 8px; border-left:1px solid var(--line); }
 .ptable th.c small { display:block; font-weight:400; }
 .ptable .stk { position:sticky; left:0; background:var(--card); z-index:1; white-space:nowrap; }
 .ptable td.sum { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.ptable td.has { background:color-mix(in srgb, var(--acc) 14%, transparent); }
+.ptable td.has { background:var(--accbg); }
 .ptable td.sent { color:var(--ok); }
 .ptable td.rm { cursor:pointer; }
 .ptable td.rm:hover { background:color-mix(in srgb, var(--bad) 22%, transparent); }
@@ -252,7 +265,6 @@ progress { width:200px; vertical-align:middle; }
 .ctable { table-layout:fixed; }
 .ptable td.fail { color:var(--bad); }
 .ptable td.gone { color:var(--mut); text-decoration:line-through; }
-header .quit { margin-left:auto; }
 .ptable tfoot td { font-weight:600; border-top:2px solid var(--line); }
 </style>
 </head>
@@ -265,7 +277,8 @@ header .quit { margin-left:auto; }
     <button data-tab="prev">3. Preview</button>
     <button data-tab="clear">4. Review</button>
   </nav>
-  <button class="btn danger quit" id="quit" title="Stop the local server">Stop app</button>
+  <button class="btn" id="theme" style="margin-left:auto" title="Theme: auto"></button>
+  <button class="btn danger" id="quit" title="Stop the local server">Stop app</button>
 </header>
 <main>
 
@@ -1598,6 +1611,18 @@ async function send() {
   renderPreview();
   setTimeout(() => { if (pSendSt === res) { pSendSt = null; renderPreview(); } }, 4000);
 }
+
+// Theme: explicit light/dark is stored separately from S; without it the system preference applies.
+const sysDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+function curTheme() { return document.documentElement.dataset.theme || (sysDark() ? 'dark' : 'light'); }
+function paintTheme() { const d = curTheme() === 'dark'; $('#theme').textContent = d ? '☀' : '🌙'; $('#theme').title = d ? 'Switch to light theme' : 'Switch to dark theme'; }
+$('#theme').onclick = () => {
+  const t = curTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('jiraTrackTheme', t); } catch (e) {}
+  paintTheme();
+};
+paintTheme();
 
 $('#quit').onclick = async () => {
   if (!confirm('Stop the app? The local server will shut down.')) return;

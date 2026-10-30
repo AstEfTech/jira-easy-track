@@ -2,4 +2,3 @@ jira-track.config.json
 __pycache__/
 *.pyc
 CLAUDE.md
-media/*.py

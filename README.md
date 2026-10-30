@@ -46,6 +46,8 @@ python jira-track.py
 
 The browser opens at `http://127.0.0.1:4777` (set `JIRA_TRACK_PORT` to change it; a free port is picked if it is busy; `--no-open` skips opening the browser). Press `Ctrl+C` in the terminal or the **Stop app** button to quit.
 
+The 🌙/☀ button in the header switches between the light and dark theme. By default the system preference is used; the choice is remembered in the browser.
+
 ## Config file (optional)
 
 The **Save to config file** button stores the connection, JQL, displayed fields, permanent tasks (with their per day hours), pinned tasks (📌 or **Add task**), working day settings (including the distribution options) and the tracking window statuses in `jira-track.config.json` next to the script. Once saved, it is loaded on every start and kept up to date automatically. Set `JIRA_TRACK_CONFIG` to use a different path.

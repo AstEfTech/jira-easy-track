@@ -200,6 +200,9 @@ th.pc, td.pc { width:100%; text-align:right; white-space:nowrap; }
 button.pinbtn { border:0; background:none; cursor:pointer; font:inherit; padding:0 4px; filter:grayscale(1); opacity:.35; }
 button.pinbtn:hover { opacity:.7; } button.pinbtn.on { filter:none; opacity:1; }
 #k-ptable td:last-child, #k-ptable th:last-child { width:100%; text-align:right; }
+#k-ptable details.pd summary { cursor:pointer; white-space:nowrap; min-width:90px; }
+#k-ptable details.pd div { display:flex; flex-direction:column; gap:2px; padding:4px 0; font-size:13px; }
+#k-ptable details.pd label { display:flex; gap:6px; align-items:center; }
 #k-ptable button.unpin { border:0; background:none; color:var(--mut); cursor:pointer; font:inherit; padding:0 4px; }
 .help { color:var(--mut); font-size:12px; margin:6px 0 14px; padding-left:18px; line-height:1.6; }
 .help ul { margin:2px 0 4px; padding-left:18px; }
@@ -337,7 +340,7 @@ header .quit { margin-left:auto; }
   <ul class="help">
     <li><b>Tracked in task</b>: all time logged on the task in Jira (by anyone), with the original estimate if it has one, e.g. "11h (14h estimate)". In Permanent tasks, <b>Tracked in period</b> is your own time on the task within the Period.</li>
     <li><b>To track</b>: hours to add, spread across the working days of the period. If left empty, nothing is tracked. When the task has an original estimate in Jira, it is shown next to Tracked, e.g. "11h (14h estimate)".</li>
-    <li><b>Permanent tasks</b> (the table above the list): for dailies and the like, added with "Add permanent task" in Task source. Only Key, fields, Tracked in period and <b>Per day</b> (hours logged evenly on every working day of the Period) are set for them. The checkbox there makes the calculation skip days that already have Per day tracked on the task, and add only the missing time otherwise. They are saved to the config file and loaded on start.</li>
+    <li><b>Permanent tasks</b> (the table above the list): for dailies and the like, added with "Add permanent task" in Task source. Only Key, fields, Tracked in period and <b>Per day</b> (hours logged evenly on every working day of the Period) and <b>On days</b> (weekdays for Per day, all working days by default) are set for them. The checkbox there makes the calculation skip days that already have Per day tracked on the task, and add only the missing time otherwise. They are saved to the config file and loaded on start.</li>
     <li><b>Timing</b>: how To track is spread: towards the start (default), middle or end, evenly, or a random share per day. With "Realistic spread" the days are additionally shuffled a bit, so the hours do not follow the shape strictly.
     <li><b>Range</b>: which days a task can be tracked on. It is preset when tasks are loaded, based on the task's status history; change it per task if needed.
       <ul>
@@ -472,6 +475,7 @@ const DEF = {
   jqlTracked: false,
   fields: [{ id: 'summary', name: 'Summary' }],
   permanent: [],  // Permanent tasks (Per day)
+  pdays: {},  // Permanent task key -> weekdays (0-6) of its Per day; absent = all working days of the schedule
   pinned: [],  // tasks added with "Add task"
   track: { from: 'In Progress', to: 'Done', on: true },
   windows: {},
@@ -512,7 +516,7 @@ const cfgStatus = (text, cls, title) => setBtn($('#c-savecfg'), text, cls, title
 async function saveConfig() {
   try {
     const body = Object.fromEntries(CFG_KEYS.map((k) => [k, S[k]]));
-    body.permanent = S.permanent.map((key) => ({ key, perDay: S.plan[key]?.fixed || '' }));
+    body.permanent = S.permanent.map((key) => ({ key, perDay: S.plan[key]?.fixed || '', ...(S.pdays[key] ? { days: S.pdays[key] } : {}) }));
     body.workday = Object.fromEntries(WORKDAY_KEYS.map((k) => [k, S.sched[k]]));
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -542,7 +546,9 @@ async function loadConfig() {
     if (Array.isArray(permItems)) {
       const items = permItems.map((p) => (p && typeof p === 'object' ? p : { key: p })).filter((p) => p.key);
       S.permanent = items.map((p) => String(p.key));
+      S.pdays = {};
       items.forEach((p) => {
+        if (Array.isArray(p.days)) S.pdays[String(p.key)] = p.days.map(Number).filter((d) => d >= 0 && d <= 6);
         if (typeof p.perDay !== 'string' && typeof p.perDay !== 'number') return;
         const k = String(p.key);
         const pl = (S.plan[k] ??= { total: '', fixed: '', shift: '', range: '' });
@@ -854,14 +860,27 @@ function keyFieldCells(key) {
   const cells = S.fields.map((f) => { const v = val(i?.fields?.[f.id]); return `<td class="fw">${esc(v.length > 200 ? v.slice(0, 200) + '…' : v)}</td>`; }).join('');
   return `<td class="kw">${link(key)}</td>${cells}`;
 }
+// Weekdays of a permanent task's Per day (default: the schedule's working days) and whether it applies on a date.
+const pDays = (key) => S.pdays[key] || S.sched.days;
+const pdOn = (key, date) => !S.pdays[key] || S.pdays[key].includes(pYmd(date).getDay());
+const pdLabel = (key) => {
+  const sel = [1, 2, 3, 4, 5, 6, 0].filter((d) => pDays(key).includes(d));
+  return !S.pdays[key] ? 'Working days' : sel.length ? sel.map((d) => WD[d]).join(', ') : 'None';
+};
+function pdMenu(key) {
+  const boxes = [1, 2, 3, 4, 5, 6, 0].filter((d) => S.sched.days.includes(d) || pDays(key).includes(d))
+    .map((d) => `<label><input type="checkbox" data-pd="${esc(key)}" value="${d}"${pDays(key).includes(d) ? ' checked' : ''}> ${WD[d]}</label>`).join('');
+  return `<details class="pd"><summary title="Days of the week when Per day is tracked">${esc(pdLabel(key))}</summary><div>${boxes}</div></details>`;
+}
 // Pinned (permanent) tasks: Key, fields, Tracked and Per day only; Timing is Even and Range is Whole period.
 function renderPinned() {
   const keys = S.permanent;
-  const head = headRow('<th class="num sep" title="Your time tracked on the task within the Period">Tracked in period</th>', '<th class="num">Per day</th><th></th>');
+  const head = headRow('<th class="num sep" title="Your time tracked on the task within the Period">Tracked in period</th>', '<th class="num">Per day</th><th>On days</th><th></th>');
   const rows = keys.map((key) => {
     return `<tr>${keyFieldCells(key)}` +
       `<td class="num sep" data-trk="${esc(key)}">${esc(trackedText(key))}</td>` +
       `<td class="num"><input data-k="${esc(key)}" data-f="fixed" value="${esc(S.plan[key]?.fixed || '')}" placeholder="0"></td>` +
+      `<td>${pdMenu(key)}</td>` +
       `<td><button class="unpin" data-unpin="${esc(key)}" title="Unpin">×</button></td></tr>`;
   }).join('');
   $('#k-ptable').innerHTML = keys.length ? head + rows : '';
@@ -928,9 +947,22 @@ $('#k-table').addEventListener('click', (e) => {
   save();
   renderTasks();
 });
+$('#k-ptable').addEventListener('change', (e) => {
+  const key = e.target.dataset.pd;
+  if (!key) return;
+  const box = e.target.closest('div');
+  const sel = [...box.querySelectorAll('input:checked')].map((x) => Number(x.value));
+  const def = S.sched.days;
+  // Same as the schedule: stop overriding, so the task follows later schedule changes.
+  if (sel.length === def.length && def.every((d) => sel.includes(d))) delete S.pdays[key]; else S.pdays[key] = sel;
+  box.previousSibling.textContent = pdLabel(key);
+  save();
+  renderStats();
+});
 $('#k-ptable').addEventListener('click', (e) => {
   const key = e.target.dataset.unpin;
   if (!key) return;
+  delete S.pdays[key];
   S.permanent = S.permanent.filter((k) => k !== key);
   if (S.plan[key]) { S.plan[key].fixed = ''; const p = S.plan[key]; if (!p.total && !p.shift && !p.range) delete S.plan[key]; }
   save();
@@ -1211,7 +1243,7 @@ function layout(tracked = []) {
   tasks.filter((t) => t.fixed > 0).forEach((t) => {
     let cut = false;
     days.forEach((date, d) => {
-      if (!t.ok[d]) return;
+      if (!t.ok[d] || !pdOn(t.key, date)) return;
       // "Track only what is missing": the time the task already has on this day counts towards Per day.
       const done = S.sched.perDayTop ? trackedDay[t.key]?.[date] || 0 : 0;
       const u = done ? Math.round(Math.max(0, t.fixed - done) / step) : units(t.fixed);
@@ -1347,10 +1379,11 @@ function renderStats() {
   }
   // planned: what the user entered for the tasks shown in the list; the tasks' Tracking windows are not applied here.
   const listed = new Set(listedIssues().map((i) => i.key));
-  const plan = Object.entries(planOf()).filter(([k]) => listed.has(k) || S.permanent.includes(k)).map(([, p]) => p);
-  const toTrack = plan.reduce((a, p) => a + (parseH(p.total) || 0), 0);
-  const perDay = plan.reduce((a, p) => a + (parseH(p.fixed) || 0), 0);
-  const planned = toTrack + perDay * days.length;
+  const plan = Object.entries(planOf()).filter(([k]) => listed.has(k) || S.permanent.includes(k));
+  const toTrack = plan.reduce((a, [, p]) => a + (parseH(p.total) || 0), 0);
+  // Each permanent task counts only the days selected for it.
+  const perDay = plan.reduce((a, [k, p]) => a + (parseH(p.fixed) || 0) * days.filter((d) => pdOn(k, d)).length, 0);
+  const planned = toTrack + perDay;
   const work = days.length * g.len;
   const trackedTot = tracked.reduce((a, w) => a + w.min, 0);
   const available = Math.max(0, work - trackedTot);
@@ -1367,7 +1400,7 @@ function renderStats() {
     s.useTracked ? `<b>already tracked</b> = your worklogs on all tasks from ${esc(s.from)} to ${esc(s.to)} = ${pending ? '...' : fmtD(trackedTot)}` : '',
     s.useTracked ? `<b>available</b> = ${fmtD(work)} total working time − ${pending ? '...' : fmtD(trackedTot)} already tracked = ${pending ? '...' : fmtD(available)}`
       : `<b>available</b> = total working time = ${fmtD(available)} (already tracked time is not subtracted: "Account for already tracked time" is off)`,
-    `<b>planned</b> = ${fmtD(toTrack)} To track (tasks shown in the list) + ${fmtD(perDay)} Per day (permanent tasks) × ${days.length} working days = ${fmtD(planned)}; shown in red when it exceeds available`,
+    `<b>planned</b> = ${fmtD(toTrack)} To track (tasks shown in the list) + ${fmtD(perDay)} Per day (permanent tasks, each × its selected working days) = ${fmtD(planned)}; shown in red when it exceeds available`,
     'The Tracking window of each task is not taken into account in these numbers.',
   ].filter(Boolean).map((x) => `<li>${x}</li>`).join('');
 }

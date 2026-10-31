@@ -1,0 +1,45 @@
+name: Update demo GIF
+
+on:
+  push:
+    branches: [main]
+    # the GIF itself is not listed, so the bot commit does not retrigger this workflow
+    paths:
+      - jira-track.py
+      - media/capture.py
+      - media/scenario.py
+      - .github/workflows/update-gif.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-gif
+  cancel-in-progress: true
+
+jobs:
+  gif:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pillow playwright
+      - run: playwright install --with-deps chromium
+      - name: Record GIF
+        run: python media/capture.py
+        env:
+          BROWSER_CHANNEL: ''
+      - name: Commit updated GIF
+        run: |
+          if git diff --quiet -- media/Jira_Easy_Track.gif; then
+            echo "GIF unchanged"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add media/Jira_Easy_Track.gif
+          git commit -m "Update Jira_Easy_Track.gif [skip ci]"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push

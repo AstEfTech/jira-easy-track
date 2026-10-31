@@ -3,7 +3,8 @@
     pip install pillow playwright      (uses the installed Microsoft Edge)
     py media/capture.py
 
-The steps are in scenario.py. Env: GIF_OUT (output path), FRAMES_DIR (also dump the frames as PNG).
+The steps are in scenario.py. Env: GIF_OUT (output path), FRAMES_DIR (also dump the frames as PNG),
+BROWSER_CHANNEL (default msedge; empty = Playwright's bundled Chromium, used in CI).
 """
 import io, json, os, re, subprocess, sys, tempfile, time, urllib.request
 from playwright.sync_api import sync_playwright
@@ -214,7 +215,7 @@ def main():
             except Exception:
                 time.sleep(0.2)
         with sync_playwright() as pw:
-            br = pw.chromium.launch(channel='msedge')
+            br = pw.chromium.launch(channel=os.environ.get('BROWSER_CHANNEL', 'msedge') or None)
             ctx = br.new_context(viewport={'width': W, 'height': H}, color_scheme='dark', locale='en-GB', timezone_id='Europe/Warsaw')
             ctx.add_init_script("localStorage.getItem('jiraTrackNoBS.v1') || localStorage.setItem('jiraTrackNoBS.v1', JSON.stringify({sched:{from:'2026-10-12',to:'2026-10-23'}}))")
             ctx.route('**/api/jira', route_jira)
